@@ -1,0 +1,116 @@
+import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../utils/constants.dart';
+
+/// SNTP Clock Synchronisation Service.
+///
+/// Why: Students can set phone time forward/backward to generate a valid TOTP
+/// at the wrong moment, or to slip outside the 60-second HMAC window.
+///
+/// Fix: On every app open and every WorkManager tick, we fetch the server's
+/// UTC millisecond timestamp. We compute:
+///   clockDeltaMs = serverNow - phoneNow   (corrected for round-trip latency)
+///   trueTime = DateTime.now() + Duration(milliseconds: clockDeltaMs)
+///
+/// All timestamps that go into signed payloads use [SntpService.now()].
+class SntpService {
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+  static const _kDelta    = 'sg_clock_delta_ms';
+  static const _kLastSync = 'sg_clock_last_sync';
+  static const _maxStalenessMs = 15 * 60 * 1000; // 15 minutes
+
+  static int  _deltaMs = 0;
+  static bool _synced  = false;
+
+  /// Returns server-corrected UTC now.
+  static DateTime now() =>
+      DateTime.now().toUtc().add(Duration(milliseconds: _deltaMs));
+
+  /// Unix milliseconds — used inside HMAC canonical strings.
+  static int nowMs() => now().millisecondsSinceEpoch;
+
+  /// ISO-8601 UTC string — stored in DB and sent to server.
+  static String nowIso() => now().toIso8601String();
+
+  static int  get deltaMs  => _deltaMs;
+  static bool get isSynced => _synced;
+
+  // ── Sync ──────────────────────────────────────────────────────────────────
+
+  /// Try intranet first, fall back to cloud.
+  /// Called from Phase 0 (background sync) and on every app launch.
+  static Future<SntpResult> sync() async {
+    var result = await _syncFrom(AppConstants.intranetBaseUrl);
+    if (!result.success) {
+      result = await _syncFrom(AppConstants.cloudBaseUrl);
+    }
+    if (!result.success) {
+      result = await _loadCache();
+    }
+    return result;
+  }
+
+  static Future<SntpResult> _syncFrom(String baseUrl) async {
+    try {
+      final dio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(seconds: 5),
+      ));
+
+      final t1 = DateTime.now().millisecondsSinceEpoch;
+      final res = await dio.get('$baseUrl/time');
+      final t4 = DateTime.now().millisecondsSinceEpoch;
+
+      if (res.statusCode != 200) return SntpResult.fail('HTTP ${res.statusCode}');
+
+      final serverMs = (res.data['server_utc_ms'] as num).toInt();
+      final rtt      = t4 - t1;
+      final delta    = (serverMs + rtt ~/ 2) - t4;
+
+      _deltaMs = delta;
+      _synced  = true;
+
+      await _storage.write(key: _kDelta,    value: delta.toString());
+      await _storage.write(key: _kLastSync, value: t4.toString());
+
+      return SntpResult(success: true, deltaMs: delta, rttMs: rtt);
+    } catch (_) {
+      return SntpResult.fail('Unreachable: $baseUrl');
+    }
+  }
+
+  static Future<SntpResult> _loadCache() async {
+    final deltaStr    = await _storage.read(key: _kDelta);
+    final lastSyncStr = await _storage.read(key: _kLastSync);
+    if (deltaStr == null || lastSyncStr == null) {
+      _deltaMs = 0; _synced = false;
+      return SntpResult.fail('No cache — using phone time');
+    }
+    final age = DateTime.now().millisecondsSinceEpoch - int.parse(lastSyncStr);
+    _deltaMs  = int.parse(deltaStr);
+    _synced   = age < _maxStalenessMs;
+    return SntpResult(success: _synced, deltaMs: _deltaMs, rttMs: 0, fromCache: true);
+  }
+
+  /// Load persisted delta at startup before network is available.
+  static Future<void> loadCached() => _loadCache();
+}
+
+class SntpResult {
+  final bool   success;
+  final int    deltaMs;
+  final int    rttMs;
+  final bool   fromCache;
+  final String? error;
+  const SntpResult({
+    required this.success,
+    required this.deltaMs,
+    required this.rttMs,
+    this.fromCache = false,
+    this.error,
+  });
+  factory SntpResult.fail(String e) =>
+      SntpResult(success: false, deltaMs: 0, rttMs: 0, error: e);
+}
