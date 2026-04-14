@@ -47,6 +47,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   File?           _approvalDoc;
   bool            _uploadingApproval = false;
   String?         _approvalError;
+  String?         _leaveId;  // From /leave/request
+  bool            _pollingApproval = false;
 
   // Step 4 — Result
   EventResult? _result;
@@ -285,9 +287,47 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         expectedReturn : _expectedReturn,
       );
 
+      // If leave requires approval (>5 hours), we need to call /leave/request first
+      if (result.success && result.requiresApproval && _expectedReturn != null && _qr != null) {
+        final approvalSvc = ApprovalService(_db);
+        final leaveReqResult = await approvalSvc.submitLeaveRequest(
+          gateId: _qr!.gateId,
+          reason: _reason,
+          expectedReturn: _expectedReturn!,
+        );
+
+        if (leaveReqResult.success && leaveReqResult.leaveId != null) {
+          setState(() {
+            _leaveId = leaveReqResult.leaveId;
+            _result = result;
+            _processing = false;
+          });
+
+          // If needs doc upload, go to approval step
+          if (leaveReqResult.requiresDocUpload || leaveReqResult.status == 'PENDING_APPROVAL') {
+            setState(() => _step = _stepApproval);
+            return;
+          }
+
+          // Otherwise start polling for approval
+          if (!leaveReqResult.canProceed) {
+            _startPollingForApproval();
+            return;
+          }
+        } else {
+          setState(() {
+            _approvalError = leaveReqResult.error ?? 'Failed to submit leave request';
+            _result = result;
+            _processing = false;
+            _step = _stepApproval;
+          });
+          return;
+        }
+      }
+
       setState(() { _result = result; _processing = false; });
 
-      if (result.success && result.requiresApproval) {
+      if (result.success && result.requiresApproval && _leaveId == null) {
         setState(() => _step = _stepApproval);
       } else {
         setState(() => _step = _stepResult);
@@ -301,8 +341,73 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  // Poll for warden approval every 30 seconds
+  void _startPollingForApproval() {
+    setState(() => _pollingApproval = true);
+    _pollLoop();
+  }
+
+  Future<void> _pollLoop() async {
+    if (_leaveId == null || !_pollingApproval) return;
+
+    await Future.delayed(const Duration(seconds: 30));
+
+    if (!mounted || !_pollingApproval) return;
+
+    final approvalSvc = ApprovalService(_db);
+    final status = await approvalSvc.pollStatus(_leaveId!);
+
+    if (status.canProceed) {
+      setState(() {
+        _pollingApproval = false;
+        _step = _stepResult;
+      });
+      return;
+    }
+
+    if (status.status == 'REJECTED') {
+      setState(() {
+        _pollingApproval = false;
+        _approvalError = 'Leave request rejected by warden';
+        _step = _stepApproval;
+      });
+      return;
+    }
+
+    // Continue polling
+    _pollLoop();
+  }
+
   // STEP 3: Warden approval document (long leave only)
   Widget _buildApproval() {
+    // If we're polling, show waiting state
+    if (_pollingApproval) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const _StepHeader(
+          step: 4, total: 5,
+          title: 'Waiting for Warden Approval',
+          sub: 'Your leave request is pending. We\'ll notify you when approved.',
+        ),
+        const SizedBox(height: 32),
+        const Center(
+          child: Column(children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Polling for approval...', style: TextStyle(color: Colors.grey)),
+            SizedBox(height: 8),
+            Text('This may take a moment', style: TextStyle(color: Colors.grey, fontSize: 12)),
+          ]),
+        ),
+        const SizedBox(height: 24),
+        _InfoBox(
+          icon: Icons.hourglass_empty,
+          color: const Color(0xFFFFF8E1),
+          textColor: AppTheme.warning,
+          message: 'Your request is with the warden. You\'ll be notified once approved.',
+        ),
+      ]);
+    }
+
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const _StepHeader(
         step: 4, total: 5,
@@ -349,7 +454,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         child: _uploadingApproval
             ? const SizedBox(width: 20, height: 20,
                 child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : const Text('Submit & Complete Checkout'),
+            : const Text('Submit for Approval'),
       ),
     ]);
   }
@@ -360,15 +465,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _submitApproval() async {
-    if (_approvalDoc == null || _result?.eventId == null) return;
+    if (_approvalDoc == null || _leaveId == null) return;
     setState(() { _uploadingApproval = true; _approvalError = null; });
 
     final svc = ApprovalService(_db);
-    final res = await svc.submitApproval(
-        eventId: _result!.eventId!, docFile: _approvalDoc!);
+    final res = await svc.uploadApprovalDoc(
+        leaveId: _leaveId!, docFile: _approvalDoc!);
 
     if (res.success) {
-      setState(() { _uploadingApproval = false; _step = _stepResult; });
+      setState(() { _uploadingApproval = false; });
+      // Start polling for approval
+      _startPollingForApproval();
     } else {
       setState(() { _approvalError = res.error; _uploadingApproval = false; });
     }
@@ -377,6 +484,48 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   // STEP 4: Result
   Widget _buildResult() {
     final ok = _result?.success ?? false;
+    final awaitingApproval = _leaveId != null && !_pollingApproval;
+
+    // If we have a leaveId but aren't polling, it means we were approved
+    if (awaitingApproval) {
+      return Column(children: [
+        const SizedBox(height: 32),
+        const Icon(
+          Icons.check_circle_outline,
+          size: 80,
+          color: AppTheme.success,
+        ),
+        const SizedBox(height: 20),
+        const Text(
+          'Checkout Complete',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold,
+              color: AppTheme.success),
+        ),
+        const SizedBox(height: 12),
+        _MetaRow('Reason', _reason),
+        if (_expectedReturn != null)
+          _MetaRow('Expected return',
+              '${_expectedReturn!.day}/${_expectedReturn!.month}  '
+              '${_expectedReturn!.hour.toString().padLeft(2,'0')}:'
+              '${_expectedReturn!.minute.toString().padLeft(2,'0')}'),
+        _MetaRow('Face confidence',
+            '${(_result!.livenessScore * 100).toStringAsFixed(0)}%'),
+        _MetaRow('GPS distance',
+            '${_result!.gpsDistance.toStringAsFixed(0)} m from gate'),
+        const SizedBox(height: 16),
+        _InfoBox(
+          icon: Icons.check_circle_outline,
+          color: const Color(0xFFE8F5E9),
+          textColor: AppTheme.success,
+          message: 'Leave approved by warden. You may proceed.',
+        ),
+        const SizedBox(height: 32),
+        ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done')),
+      ]);
+    }
+
     return Column(children: [
       const SizedBox(height: 32),
       Icon(
@@ -428,7 +577,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         TextButton(
           onPressed: () => setState(() {
             _step = _stepReason; _qrDone = false; _qr = null;
-            _faceResult = null; _result = null;
+            _faceResult = null; _result = null; _leaveId = null;
           }),
           child: const Text('Try Again'),
         ),

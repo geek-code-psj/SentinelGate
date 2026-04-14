@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 import '../models/database.dart';
 import '../utils/constants.dart';
 import 'crypto_service.dart';
@@ -26,15 +27,43 @@ class ApiService {
     headers        : {'Accept': 'application/json'},
   ));
 
+  // ── Device Enrollment ───────────────────────────────────────────────────────
+
+  /// Call backend to enroll this device and get HMAC secret.
+  static Future<ApiResult> enrollDevice({
+    required String rollNumber,
+    required String deviceFingerprint,
+    required String platform,
+    required String model,
+  }) async {
+    final body = {
+      'roll_number': rollNumber,
+      'device_fingerprint': deviceFingerprint,
+      'platform': platform,
+      'model': model,
+    };
+
+    // Enrollment does NOT require HMAC signature (no secret yet)
+    try {
+      var res = await _intra.post('/auth/enroll', data: jsonEncode(body));
+      if (res.statusCode == 200 || res.statusCode == 201) return ApiResult.ok(res.data);
+      res = await _cld.post('/auth/enroll', data: jsonEncode(body));
+      if (res.statusCode == 200 || res.statusCode == 201) return ApiResult.ok(res.data);
+      return ApiResult.err('Enrollment failed: ${res.statusCode}');
+    } on DioException catch (e) {
+      return ApiResult.err(_dioMsg(e));
+    }
+  }
+
   // ── Gate Event Upload ──────────────────────────────────────────────────────
 
   static Future<ApiResult> uploadEvent(GateEvent e) async {
     final body = _eventBody(e);
-    final signed = await CryptoService.sign(method: 'POST', path: '/events', body: body);
+    final signed = await CryptoService.sign(method: 'POST', path: '/auth/event', body: body);
 
     // Try intranet first, then cloud
-    var result = await _post(_intra, '/events', body, signed.headers);
-    if (!result.ok) result = await _post(_cld, '/events', body, signed.headers);
+    var result = await _post(_intra, '/auth/event', body, signed.headers);
+    if (!result.ok) result = await _post(_cld, '/auth/event', body, signed.headers);
     return result;
   }
 
@@ -42,18 +71,19 @@ class ApiService {
 
   static Future<ApiResult> uploadSpoofAttempt(SpoofAttempt a) async {
     final body   = _spoofBody(a);
-    final signed = await CryptoService.sign(method: 'POST', path: '/spoof', body: body);
-    var result   = await _post(_intra, '/spoof', body, signed.headers);
-    if (!result.ok) result = await _post(_cld, '/spoof', body, signed.headers);
+    final signed = await CryptoService.sign(method: 'POST', path: '/sync/spoof', body: body);
+    var result   = await _post(_intra, '/sync/spoof', body, signed.headers);
+    if (!result.ok) result = await _post(_cld, '/sync/spoof', body, signed.headers);
     return result;
   }
 
   // ── Geofence Zones Fetch ───────────────────────────────────────────────────
 
   static Future<ApiResult> fetchZones({String? since}) async {
-    final path   = since != null ? '/zones?since=$since' : '/zones';
+    // Call /sync/delta to get geofences and gate modes
+    final path = since != null ? '/sync/delta?since=$since' : '/sync/delta';
     final signed = await CryptoService.sign(method: 'GET', path: path, body: {});
-    var result   = await _get(_intra, path, signed.headers);
+    var result = await _get(_intra, path, signed.headers);
     if (!result.ok) result = await _get(_cld, path, signed.headers);
     return result;
   }
@@ -61,51 +91,58 @@ class ApiService {
   // ── Server Time Endpoint ───────────────────────────────────────────────────
 
   static Future<ApiResult> fetchTime() async {
-    var result = await _get(_intra, '/time', {});
-    if (!result.ok) result = await _get(_cld, '/time', {});
+    var result = await _get(_intra, '/sync/time', {});
+    if (!result.ok) result = await _get(_cld, '/sync/time', {});
     return result;
   }
 
-  // ── Warden Approval Upload ─────────────────────────────────────────────────
+  // ── Leave Request (Phase 3) ─────────────────────────────────────────────────
 
-  static Future<ApiResult> uploadApproval({
-    required String eventId,
+  static Future<ApiResult> submitLeaveRequest({
+    required String gateId,
+    required String reason,
+    required int expectedReturnTs,
+    String? approvalDocB64,
+  }) async {
+    final body = {
+      'gate_id': gateId,
+      'reason': reason,
+      'expected_return_ts': expectedReturnTs,
+      if (approvalDocB64 != null) 'approval_doc_b64': approvalDocB64,
+    };
+    final signed = await CryptoService.sign(method: 'POST', path: '/leave/request', body: body);
+    var result = await _post(_intra, '/leave/request', body, signed.headers);
+    if (!result.ok) result = await _post(_cld, '/leave/request', body, signed.headers);
+    return result;
+  }
+
+  // ── Leave Status Polling ───────────────────────────────────────────────────
+
+  static Future<ApiResult> pollLeaveStatus(String leaveId) async {
+    final signed = await CryptoService.sign(method: 'GET', path: '/leave/status/$leaveId', body: {});
+    var result = await _get(_intra, '/leave/status/$leaveId', signed.headers);
+    if (!result.ok) result = await _get(_cld, '/leave/status/$leaveId', signed.headers);
+    return result;
+  }
+
+  // ── Warden Approval Document Upload ─────────────────────────────────────────
+
+  static Future<ApiResult> uploadApprovalDoc({
+    required String leaveId,
     required List<int> docBytes,
     required String mimeType,
-    required String imageUrl,
   }) async {
+    final body = {
+      'approval_doc_b64': base64Encode(docBytes),
+    };
     final signed = await CryptoService.sign(
       method: 'POST',
-      path: '/approvals',
-      body: {
-        'event_id': eventId,
-        'image_url': imageUrl,
-        'mime_type': mimeType,
-      },
+      path: '/leave/upload-doc/$leaveId',
+      body: body,
     );
-
-    final formData = FormData.fromMap({
-      'event_id': eventId,
-      'image_url': imageUrl,
-      'document': MultipartFile.fromBytes(docBytes, filename: 'approval.$mimeType'),
-    });
-    try {
-      var res = await _intra.post(
-        '/approvals',
-        data: formData,
-        options: Options(headers: signed.headers),
-      );
-      if (res.statusCode == 200 || res.statusCode == 201) return ApiResult.ok(res.data);
-      res = await _cld.post(
-        '/approvals',
-        data: formData,
-        options: Options(headers: signed.headers),
-      );
-      if (res.statusCode == 200 || res.statusCode == 201) return ApiResult.ok(res.data);
-      return ApiResult.err('Upload failed: ${res.statusCode}');
-    } catch (e) {
-      return ApiResult.err('Upload error: $e');
-    }
+    var result = await _post(_intra, '/leave/upload-doc/$leaveId', body, signed.headers);
+    if (!result.ok) result = await _post(_cld, '/leave/upload-doc/$leaveId', body, signed.headers);
+    return result;
   }
 
   // ── HTTP helpers ──────────────────────────────────────────────────────────

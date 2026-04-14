@@ -174,7 +174,7 @@ class GateEventService {
 
     final signed = await CryptoService.sign(
       method : 'POST',
-      path   : '/api/v1/events',
+      path   : '/auth/event',
       body   : payload,
     );
 

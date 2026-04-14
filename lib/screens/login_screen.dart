@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:uuid/uuid.dart';
 import '../services/crypto_service.dart';
+import '../services/api_service.dart';
 import '../utils/app_theme.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -27,15 +30,78 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _enroll() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _loading = true; _error = null; });
+
     try {
-      await CryptoService.provisionSecret();
+      // Get device fingerprint (use a unique ID)
+      final deviceInfo = await _getDeviceInfo();
+
+      // Call backend to enroll device and get HMAC secret
+      final enrollResult = await ApiService.enrollDevice(
+        rollNumber: _rollCtrl.text.trim().toUpperCase(),
+        deviceFingerprint: deviceInfo['fingerprint']!,
+        platform: deviceInfo['platform']!,
+        model: deviceInfo['model']!,
+      );
+
+      if (!enrollResult.ok) {
+        setState(() { _error = enrollResult.error ?? 'Enrollment failed'; _loading = false; });
+        return;
+      }
+
+      // Save the HMAC secret and device ID from server response
+      final data = enrollResult.data as Map<String, dynamic>;
+      final hmacSecret = data['hmac_secret'] as String?;
+      final deviceId = data['device_id'] as String?;
+
+      if (hmacSecret == null || deviceId == null) {
+        setState(() { _error = 'Invalid server response - missing data'; _loading = false; });
+        return;
+      }
+
+      // Store the server-provided HMAC secret and device ID
+      await CryptoService.saveDeviceId(deviceId);
+      await CryptoService.saveHmacSecret(hmacSecret);
       await CryptoService.saveStudentId(_rollCtrl.text.trim().toUpperCase());
       await CryptoService.setEnrolled();
+
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
       setState(() { _error = 'Enrollment failed: $e'; _loading = false; });
     }
+  }
+
+  Future<Map<String, String>> _getDeviceInfo() async {
+    // Get device ID for fingerprint
+    final deviceId = await _getDeviceId();
+
+    // Detect platform
+    final platform = Theme.of(context).platform == TargetPlatform.android ? 'android' : 'ios';
+
+    // Get model (fallback to generic)
+    String model = 'Unknown';
+    try {
+      // This would need device_info package for actual model
+      model = 'Android Device';
+    } catch (_) {}
+
+    return {
+      'fingerprint': deviceId,
+      'platform': platform,
+      'model': model,
+    };
+  }
+
+  Future<String> _getDeviceId() async {
+    // Use Flutter's unique device ID (identifierForVendor on iOS, Android ID on Android)
+    // For now, generate a persistent UUID stored in secure storage
+    const storage = FlutterSecureStorage();
+    String? deviceId = await storage.read(key: 'sg_device_fingerprint');
+    if (deviceId == null) {
+      deviceId = const Uuid().v4();
+      await storage.write(key: 'sg_device_fingerprint', value: deviceId);
+    }
+    return deviceId;
   }
 
   @override

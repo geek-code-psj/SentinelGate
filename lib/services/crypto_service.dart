@@ -29,6 +29,8 @@ class CryptoService {
   static const _kSecret     = 'sg_device_secret_v1';
   static const _kStudentId  = 'sg_student_id';
   static const _kEnrolled   = 'sg_enrolled';
+  static const _kHmacSecret = 'sg_hmac_secret';
+  static const _kDeviceId  = 'sg_device_id';
 
   static final _hmac   = Hmac.sha256();
   static final _sha256 = Sha256();
@@ -54,6 +56,20 @@ class CryptoService {
   static Future<bool> isEnrolled() async =>
       (await _storage.read(key: _kEnrolled)) == 'true';
 
+  /// Save the HMAC secret received from server during enrollment
+  static Future<void> saveHmacSecret(String secret) =>
+      _storage.write(key: _kHmacSecret, value: secret);
+
+  /// Get the HMAC secret (for signing requests)
+  static Future<String?> getHmacSecret() => _storage.read(key: _kHmacSecret);
+
+  /// Save the device ID received from server during enrollment
+  static Future<void> saveDeviceId(String id) =>
+      _storage.write(key: _kDeviceId, value: id);
+
+  /// Get the device ID (for x-device-id header)
+  static Future<String?> getDeviceId() => _storage.read(key: _kDeviceId);
+
   static Future<void> clearAll() => _storage.deleteAll();
 
   // ── HMAC-SHA256 Signing ────────────────────────────────────────────────────
@@ -67,6 +83,10 @@ class CryptoService {
     required String path,         // '/api/v1/events'
     required Map<String, dynamic> body,
   }) async {
+    // 0. Get device ID for header
+    final deviceId = await _storage.read(key: _kDeviceId);
+    if (deviceId == null) throw StateError('Device not enrolled - no device ID');
+
     // 1. Hash body
     final bodyJson  = jsonEncode(body);
     final bodyHash  = await _sha256.hash(utf8.encode(bodyJson));
@@ -81,14 +101,15 @@ class CryptoService {
     // 4. Canonical string — ordering is load-bearing; server must match exactly
     final canonical = '$method\n$path\n$bodyHex\n$timestamp\n$nonce';
 
-    // 5. HMAC-SHA256 with vaulted key
-    final keyB64 = await _storage.read(key: _kSecret);
-    if (keyB64 == null) throw StateError('Device not enrolled');
-    final key = SecretKey(base64Url.decode(keyB64));
+    // 5. HMAC-SHA256 with server-provided secret
+    final keyHex = await _storage.read(key: _kHmacSecret);
+    if (keyHex == null) throw StateError('Device not enrolled - no HMAC secret');
+    final key = SecretKey(utf8.encode(keyHex));  // Server sends hex string
     final mac = await _hmac.calculateMac(utf8.encode(canonical), secretKey: key);
     final sigHex = _bytesToHex(mac.bytes);
 
     return SignedPayload(
+      deviceId : deviceId,
       signature : sigHex,
       timestamp : timestamp,
       nonce     : nonce,
@@ -110,12 +131,14 @@ class CryptoService {
 }
 
 class SignedPayload {
+  final String deviceId;
   final String signature;
   final String timestamp;  // SNTP-corrected Unix ms
   final String nonce;
   final String bodyHex;
 
   const SignedPayload({
+    required this.deviceId,
     required this.signature,
     required this.timestamp,
     required this.nonce,
@@ -124,9 +147,10 @@ class SignedPayload {
 
   /// HTTP headers appended to every authenticated request.
   Map<String, String> get headers => {
-    'Content-Type'           : 'application/json',
-    'x-request-signature'    : signature,
-    'x-request-timestamp'    : timestamp,
-    'x-request-nonce'        : nonce,
+    'Content-Type'       : 'application/json',
+    'x-device-id'        : deviceId,
+    'x-request-sig'      : signature,
+    'x-request-ts'       : timestamp,
+    'x-request-nonce'    : nonce,
   };
 }

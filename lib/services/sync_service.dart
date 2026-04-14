@@ -81,15 +81,15 @@ class SyncService {
     final result = await ApiService.fetchZones();
     if (!result.ok || result.data == null) return;
 
-    final list = (result.data['zones'] as List? ?? []);
+    final list = (result.data['geofences'] as List? ?? []);
     final companions = list.map((z) => GeofenceZonesCompanion(
-      zoneId       : Value(z['zone_id']  as String),
-      gateId       : Value(z['gate_id']  as String),
-      gateName     : Value(z['gate_name'] as String),
-      centerLat    : Value((z['lat'] as num).toDouble()),
-      centerLng    : Value((z['lng'] as num).toDouble()),
-      radiusMeters : Value((z['radius_m'] as num).toDouble()),
-      updatedAt    : Value(z['updated_at'] as String),
+      zoneId       : Value(z['id']  as String),
+      gateId       : Value(z['geofence_id'] ?? ''),
+      gateName     : Value(z['name'] as String),
+      centerLat    : Value((z['center_lat'] as num).toDouble()),
+      centerLng    : Value((z['center_lng'] as num).toDouble()),
+      radiusMeters : Value((z['radius_meters'] as num).toDouble()),
+      updatedAt    : Value(DateTime.now().toIso8601String()),
     )).toList();
 
     if (companions.isNotEmpty) await db.replaceAllZones(companions);
