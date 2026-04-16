@@ -38,10 +38,13 @@ class GateEvents extends Table {
   RealColumn get gpsLng             => real()();
   RealColumn get gpsAccuracy        => real()();
   TextColumn get gateId             => text()();
+  TextColumn get geofenceId         => text().nullable()();                        // From QR
   TextColumn get trueTimestamp      => text()();                                   // SNTP-corrected UTC
   TextColumn get phoneTimestamp     => text()();                                   // Raw phone UTC
   IntColumn  get clockDeltaMs       => integer()();                                // Server delta applied
   RealColumn get faceConfidence     => real()();
+  TextColumn get embeddingHash      => text().nullable()();                        // SHA-256 of face landmarks
+  TextColumn get totpHash           => text().nullable()();                        // SHA-256 of TOTP value
   TextColumn get hmacSignature      => text()();
   TextColumn get nonce              => text()();
   TextColumn get syncStatus         => text().withDefault(const Constant('PENDING'))();

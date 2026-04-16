@@ -91,15 +91,18 @@ class _CheckinScreenState extends State<CheckinScreen> {
               color: _qrDone ? AppTheme.success : AppTheme.success, width: 2),
         ),
         clipBehavior: Clip.hardEdge,
-        child: _qrDone
-            ? Center(
-                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  const Icon(Icons.check_circle, color: AppTheme.success, size: 52),
-                  const SizedBox(height: 8),
-                  Text('Gate: ${_qr!.gateId}',
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                ]),
-              )
+         child: _qrDone
+             ? Center(
+                 child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                   const Icon(Icons.check_circle, color: AppTheme.success, size: 52),
+                   const SizedBox(height: 8),
+                   Text('Gate: ${_qr!.gateId}',
+                       style: const TextStyle(fontWeight: FontWeight.w600)),
+                   const SizedBox(height: 4),
+                   Text('Geofence: ${_qr!.geofenceId}',
+                       style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                 ]),
+               )
             : MobileScanner(
                 controller: _qrScannerController,
                 onDetect: (capture) {

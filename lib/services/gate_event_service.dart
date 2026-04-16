@@ -152,7 +152,7 @@ class GateEventService {
     final trueNow   = SntpService.nowIso();
     final phoneNow  = DateTime.now().toUtc().toIso8601String();
     final deltaMs   = SntpService.deltaMs;
-    final totpHash  = await TotpService.hashTotp(qr.totpValue);
+    final totpHashVal  = await TotpService.hashTotp(qr.totpValue);
 
     final payload = {
       'event_id'          : eventId,
@@ -165,11 +165,14 @@ class GateEventService {
       'gps_lat'           : gps.lat,
       'gps_lng'           : gps.lng,
       'gps_accuracy'      : gps.accuracy,
+      'geofence_id'       : qr.geofenceId,
       'gate_id'           : qr.gateId,
-      'totp_hash'         : totpHash,
+      'totp_value'        : totpHashVal,
+      'totp_window'       : 30,
       'true_timestamp'    : trueNow,
       'clock_delta_ms'    : deltaMs,
-      'face_confidence'   : face.livenessScore,
+      'embedding_hash'    : face.embeddingHash,
+      'liveness_score'    : face.livenessScore,
     };
 
     final signed = await CryptoService.sign(
@@ -191,10 +194,13 @@ class GateEventService {
       gpsLng            : Value(gps.lng),
       gpsAccuracy       : Value(gps.accuracy),
       gateId            : Value(qr.gateId),
+      geofenceId        : Value(qr.geofenceId),
       trueTimestamp     : Value(trueNow),
       phoneTimestamp    : Value(phoneNow),
       clockDeltaMs      : Value(deltaMs),
       faceConfidence    : Value(face.livenessScore),
+      embeddingHash     : Value(face.embeddingHash),
+      totpHash          : Value(totpHashVal),
       hmacSignature     : Value(signed.signature),
       nonce             : Value(signed.nonce),
       syncStatus        : Value(requiresApproval ? 'PENDING_APPROVAL' : 'PENDING'),

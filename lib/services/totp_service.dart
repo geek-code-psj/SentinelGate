@@ -6,11 +6,11 @@ import '../utils/constants.dart';
 /// Parses and validates the gate QR code.
 ///
 /// QR format (URL scheme):
-///   sentinelgate://{gateId}/{totpValue}/{sessionNonce}/{expiresAtMs}
+///   sentinelgate://{gateId}/{geofenceId}/{totpValue}/{sessionNonce}/{expiresAtMs}
 ///
 /// The TOTP value rotates every 30 seconds on the server (warden's tablet).
 /// On the student app we:
-///   1. Parse the QR into components.
+///   1. Parse the QR into components including geofence_id.
 ///   2. Verify expiresAtMs using SNTP-corrected time (not phone time).
 ///   3. Compute SHA-256 of totpValue for the signed payload.
 ///
@@ -47,12 +47,13 @@ class TotpService {
         if (uri.host.isNotEmpty) uri.host,
         ...uri.pathSegments,
       ];
-      if (allSegments.length < 4) return null;
+      if (allSegments.length < 5) return null;
       return _buildPayload(
         gateId: allSegments[0],
-        totpValue: allSegments[1],
-        nonce: allSegments[2],
-        expiresAtRaw: allSegments[3],
+        geofenceId: allSegments[1],
+        totpValue: allSegments[2],
+        nonce: allSegments[3],
+        expiresAtRaw: allSegments[4],
       );
     }
 
@@ -182,12 +183,14 @@ class TotpService {
 
 class QrPayload {
   final String gateId;
+  final String geofenceId;
   final String totpValue;
   final String nonce;
   final int    expiresAt; // Unix ms
 
   const QrPayload({
     required this.gateId,
+    required this.geofenceId,
     required this.totpValue,
     required this.nonce,
     required this.expiresAt,

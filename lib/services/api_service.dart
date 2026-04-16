@@ -197,16 +197,19 @@ class ApiService {
     'expected_return'   : e.expectedReturnIso,
     'expected_duration' : e.expectedDurationMs,
     'requires_approval' : e.requiresApproval,
-    'gps'               : {
-      'lat'      : e.gpsLat,
-      'lng'      : e.gpsLng,
-      'accuracy' : e.gpsAccuracy,
-    },
+    'gps_lat'           : e.gpsLat,
+    'gps_lng'           : e.gpsLng,
+    'gps_accuracy'      : e.gpsAccuracy,
+    'geofence_id'       : e.geofenceId,
     'gate_id'           : e.gateId,
+    'totp_value'        : e.totpHash,
+    'totp_window'       : 30,
     'true_timestamp'    : e.trueTimestamp,
     'clock_delta_ms'    : e.clockDeltaMs,
-    'biometric'         : {'liveness_score': e.faceConfidence},
-    'integrity'         : {'hmac': e.hmacSignature, 'nonce': e.nonce},
+    'embedding_hash'    : e.embeddingHash,
+    'liveness_score'    : e.faceConfidence,
+    'hmac'              : e.hmacSignature,
+    'nonce'             : e.nonce,
   };
 
   static Map<String, dynamic> _spoofBody(SpoofAttempt a) => {

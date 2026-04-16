@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
@@ -110,7 +109,7 @@ class CryptoService {
   /// changing their phone clock.
   static Future<SignedPayload> sign({
     required String method,       // 'POST', 'GET', etc.
-    required String path,         // '/api/v1/events'
+    required String path,         // '/auth/event', '/leave/request', etc.
     required Map<String, dynamic> body,
   }) async {
     // 0. Get device ID for header

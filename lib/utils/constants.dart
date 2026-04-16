@@ -12,13 +12,13 @@ class AppConstants {
   /// Primary: Local campus intranet server (fast, used on campus WiFi)
   static const String intranetBaseUrl = String.fromEnvironment(
     'SG_INTRANET_BASE_URL',
-    defaultValue: 'https://sentinelgateweb-production.up.railway.app/api/v1',
+    defaultValue: 'https://sentinelgateweb-production.up.railway.app/api',
   );
 
   /// Fallback: Cloud server (used on 4G when intranet is unreachable)
   static const String cloudBaseUrl = String.fromEnvironment(
     'SG_CLOUD_BASE_URL',
-    defaultValue: 'https://sentinelgateweb-production.up.railway.app/api/v1',
+    defaultValue: 'https://sentinelgateweb-production.up.railway.app/api',
   );
 
   /// Public URLs for gate/admin web surfaces used in deployment docs.

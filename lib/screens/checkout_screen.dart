@@ -169,29 +169,32 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   // STEP 1: QR scan
   Widget _buildQr() {
     return Column(children: [
-      _StepHeader(step: 2, total: 5, title: 'Scan Gate QR Code',
-          sub: 'Point your camera at the warden\'s rotating QR code'),
-      const SizedBox(height: 20),
-      Container(
-        height: 280,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: _qrDone ? AppTheme.success : AppTheme.primary, width: 2),
-        ),
-        clipBehavior: Clip.hardEdge,
-        child: _qrDone
-            ? Center(
-                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  const Icon(Icons.check_circle, color: AppTheme.success, size: 52),
-                  const SizedBox(height: 8),
-                  Text('Gate: ${_qr!.gateId}',
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Text('Token expires in ${(TotpService.msRemaining(_qr!) / 1000).ceil()}s',
-                      style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                ]),
-              )
+       const _StepHeader(step: 2, total: 5, title: 'Scan Gate QR Code',
+           sub: 'Point your camera at the warden\'s rotating QR code'),
+       const SizedBox(height: 20),
+       Container(
+         height: 280,
+         decoration: BoxDecoration(
+           borderRadius: BorderRadius.circular(16),
+           border: Border.all(
+             color: _qrDone ? AppTheme.success : AppTheme.primary, width: 2),
+         ),
+         clipBehavior: Clip.hardEdge,
+         child: _qrDone
+             ? Center(
+                 child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                   const Icon(Icons.check_circle, color: AppTheme.success, size: 52),
+                   const SizedBox(height: 8),
+                   Text('Gate: ${_qr!.gateId}',
+                       style: const TextStyle(fontWeight: FontWeight.w600)),
+                   const SizedBox(height: 4),
+                   Text('Geofence: ${_qr!.geofenceId}',
+                       style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                   const SizedBox(height: 4),
+                   Text('Token expires in ${(TotpService.msRemaining(_qr!) / 1000).ceil()}s',
+                       style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                 ]),
+               )
             : MobileScanner(
                 controller: _qrScannerController,
                 onDetect: (capture) {
