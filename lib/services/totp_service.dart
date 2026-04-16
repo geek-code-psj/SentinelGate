@@ -66,6 +66,7 @@ class TotpService {
       }
 
       final gateId = qp['gate_id'] ?? qp['gateId'];
+      final geofenceId = qp['geofence_id'] ?? qp['geofenceId'] ?? qp['geo'];
       final totp = qp['totp'] ?? qp['totp_token'] ?? qp['token'];
       final nonce = qp['session_nonce'] ?? qp['nonce'] ?? qp['sessionNonce'];
       final expires = qp['expires_at'] ?? qp['expiresAt'] ?? qp['exp'];
@@ -74,6 +75,7 @@ class TotpService {
       }
       return _buildPayload(
         gateId: gateId,
+        geofenceId: geofenceId ?? 'DEFAULT',
         totpValue: totp,
         nonce: nonce,
         expiresAtRaw: expires,
@@ -91,6 +93,7 @@ class TotpService {
       final map = Map<String, dynamic>.from(decoded);
       return _buildPayload(
         gateId: (map['gate_id'] ?? map['gateId'] ?? '').toString(),
+        geofenceId: (map['geofence_id'] ?? map['geofenceId'] ?? map['geo'] ?? '').toString(),
         totpValue: (map['totp'] ?? map['totp_token'] ?? map['token'] ?? '').toString(),
         nonce: (map['session_nonce'] ?? map['sessionNonce'] ?? map['nonce'] ?? '').toString(),
         expiresAtRaw: map['expires_at'] ?? map['expiresAt'] ?? map['exp'],
@@ -102,27 +105,31 @@ class TotpService {
 
   static QrPayload? _parseDelimitedPayload(String raw) {
     final parts = raw.split(RegExp(r'[|,/]')).map((e) => e.trim()).toList();
-    if (parts.length < 4) return null;
+    if (parts.length < 5) return null;
     return _buildPayload(
       gateId: parts[0],
-      totpValue: parts[1],
-      nonce: parts[2],
-      expiresAtRaw: parts[3],
+      geofenceId: parts[1],
+      totpValue: parts[2],
+      nonce: parts[3],
+      expiresAtRaw: parts[4],
     );
   }
 
   static QrPayload? _buildPayload({
     required String gateId,
+    required String geofenceId,
     required String totpValue,
     required String nonce,
     required dynamic expiresAtRaw,
   }) {
     final normalizedGate = gateId.trim();
+    final normalizedGeo = geofenceId.trim();
     final normalizedTotp = totpValue.trim();
     final normalizedNonce = nonce.trim();
     final expiresAt = _parseExpiry(expiresAtRaw);
 
     if (normalizedGate.isEmpty ||
+        normalizedGeo.isEmpty ||
         normalizedTotp.isEmpty ||
         normalizedNonce.isEmpty ||
         expiresAt == null) {
@@ -131,6 +138,7 @@ class TotpService {
 
     return QrPayload(
       gateId    : normalizedGate,
+      geofenceId: normalizedGeo,
       totpValue : normalizedTotp,
       nonce     : normalizedNonce,
       expiresAt : expiresAt,

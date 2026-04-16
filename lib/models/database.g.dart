@@ -469,6 +469,12 @@ class $GateEventsTable extends GateEvents
   late final GeneratedColumn<String> gateId = GeneratedColumn<String>(
       'gate_id', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _geofenceIdMeta =
+      const VerificationMeta('geofenceId');
+  @override
+  late final GeneratedColumn<String> geofenceId = GeneratedColumn<String>(
+      'geofence_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _trueTimestampMeta =
       const VerificationMeta('trueTimestamp');
   @override
@@ -493,6 +499,18 @@ class $GateEventsTable extends GateEvents
   late final GeneratedColumn<double> faceConfidence = GeneratedColumn<double>(
       'face_confidence', aliasedName, false,
       type: DriftSqlType.double, requiredDuringInsert: true);
+  static const VerificationMeta _embeddingHashMeta =
+      const VerificationMeta('embeddingHash');
+  @override
+  late final GeneratedColumn<String> embeddingHash = GeneratedColumn<String>(
+      'embedding_hash', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _totpHashMeta =
+      const VerificationMeta('totpHash');
+  @override
+  late final GeneratedColumn<String> totpHash = GeneratedColumn<String>(
+      'totp_hash', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _hmacSignatureMeta =
       const VerificationMeta('hmacSignature');
   @override
@@ -550,10 +568,13 @@ class $GateEventsTable extends GateEvents
         gpsLng,
         gpsAccuracy,
         gateId,
+        geofenceId,
         trueTimestamp,
         phoneTimestamp,
         clockDeltaMs,
         faceConfidence,
+        embeddingHash,
+        totpHash,
         hmacSignature,
         nonce,
         syncStatus,
@@ -645,6 +666,12 @@ class $GateEventsTable extends GateEvents
     } else if (isInserting) {
       context.missing(_gateIdMeta);
     }
+    if (data.containsKey('geofence_id')) {
+      context.handle(
+          _geofenceIdMeta,
+          geofenceId.isAcceptableOrUnknown(
+              data['geofence_id']!, _geofenceIdMeta));
+    }
     if (data.containsKey('true_timestamp')) {
       context.handle(
           _trueTimestampMeta,
@@ -676,6 +703,16 @@ class $GateEventsTable extends GateEvents
               data['face_confidence']!, _faceConfidenceMeta));
     } else if (isInserting) {
       context.missing(_faceConfidenceMeta);
+    }
+    if (data.containsKey('embedding_hash')) {
+      context.handle(
+          _embeddingHashMeta,
+          embeddingHash.isAcceptableOrUnknown(
+              data['embedding_hash']!, _embeddingHashMeta));
+    }
+    if (data.containsKey('totp_hash')) {
+      context.handle(_totpHashMeta,
+          totpHash.isAcceptableOrUnknown(data['totp_hash']!, _totpHashMeta));
     }
     if (data.containsKey('hmac_signature')) {
       context.handle(
@@ -746,6 +783,8 @@ class $GateEventsTable extends GateEvents
           .read(DriftSqlType.double, data['${effectivePrefix}gps_accuracy'])!,
       gateId: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}gate_id'])!,
+      geofenceId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}geofence_id']),
       trueTimestamp: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}true_timestamp'])!,
       phoneTimestamp: attachedDatabase.typeMapping.read(
@@ -754,6 +793,10 @@ class $GateEventsTable extends GateEvents
           .read(DriftSqlType.int, data['${effectivePrefix}clock_delta_ms'])!,
       faceConfidence: attachedDatabase.typeMapping.read(
           DriftSqlType.double, data['${effectivePrefix}face_confidence'])!,
+      embeddingHash: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}embedding_hash']),
+      totpHash: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}totp_hash']),
       hmacSignature: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}hmac_signature'])!,
       nonce: attachedDatabase.typeMapping
@@ -788,10 +831,13 @@ class GateEvent extends DataClass implements Insertable<GateEvent> {
   final double gpsLng;
   final double gpsAccuracy;
   final String gateId;
+  final String? geofenceId;
   final String trueTimestamp;
   final String phoneTimestamp;
   final int clockDeltaMs;
   final double faceConfidence;
+  final String? embeddingHash;
+  final String? totpHash;
   final String hmacSignature;
   final String nonce;
   final String syncStatus;
@@ -811,10 +857,13 @@ class GateEvent extends DataClass implements Insertable<GateEvent> {
       required this.gpsLng,
       required this.gpsAccuracy,
       required this.gateId,
+      this.geofenceId,
       required this.trueTimestamp,
       required this.phoneTimestamp,
       required this.clockDeltaMs,
       required this.faceConfidence,
+      this.embeddingHash,
+      this.totpHash,
       required this.hmacSignature,
       required this.nonce,
       required this.syncStatus,
@@ -842,10 +891,19 @@ class GateEvent extends DataClass implements Insertable<GateEvent> {
     map['gps_lng'] = Variable<double>(gpsLng);
     map['gps_accuracy'] = Variable<double>(gpsAccuracy);
     map['gate_id'] = Variable<String>(gateId);
+    if (!nullToAbsent || geofenceId != null) {
+      map['geofence_id'] = Variable<String>(geofenceId);
+    }
     map['true_timestamp'] = Variable<String>(trueTimestamp);
     map['phone_timestamp'] = Variable<String>(phoneTimestamp);
     map['clock_delta_ms'] = Variable<int>(clockDeltaMs);
     map['face_confidence'] = Variable<double>(faceConfidence);
+    if (!nullToAbsent || embeddingHash != null) {
+      map['embedding_hash'] = Variable<String>(embeddingHash);
+    }
+    if (!nullToAbsent || totpHash != null) {
+      map['totp_hash'] = Variable<String>(totpHash);
+    }
     map['hmac_signature'] = Variable<String>(hmacSignature);
     map['nonce'] = Variable<String>(nonce);
     map['sync_status'] = Variable<String>(syncStatus);
@@ -877,10 +935,19 @@ class GateEvent extends DataClass implements Insertable<GateEvent> {
       gpsLng: Value(gpsLng),
       gpsAccuracy: Value(gpsAccuracy),
       gateId: Value(gateId),
+      geofenceId: geofenceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(geofenceId),
       trueTimestamp: Value(trueTimestamp),
       phoneTimestamp: Value(phoneTimestamp),
       clockDeltaMs: Value(clockDeltaMs),
       faceConfidence: Value(faceConfidence),
+      embeddingHash: embeddingHash == null && nullToAbsent
+          ? const Value.absent()
+          : Value(embeddingHash),
+      totpHash: totpHash == null && nullToAbsent
+          ? const Value.absent()
+          : Value(totpHash),
       hmacSignature: Value(hmacSignature),
       nonce: Value(nonce),
       syncStatus: Value(syncStatus),
@@ -909,10 +976,13 @@ class GateEvent extends DataClass implements Insertable<GateEvent> {
       gpsLng: serializer.fromJson<double>(json['gpsLng']),
       gpsAccuracy: serializer.fromJson<double>(json['gpsAccuracy']),
       gateId: serializer.fromJson<String>(json['gateId']),
+      geofenceId: serializer.fromJson<String?>(json['geofenceId']),
       trueTimestamp: serializer.fromJson<String>(json['trueTimestamp']),
       phoneTimestamp: serializer.fromJson<String>(json['phoneTimestamp']),
       clockDeltaMs: serializer.fromJson<int>(json['clockDeltaMs']),
       faceConfidence: serializer.fromJson<double>(json['faceConfidence']),
+      embeddingHash: serializer.fromJson<String?>(json['embeddingHash']),
+      totpHash: serializer.fromJson<String?>(json['totpHash']),
       hmacSignature: serializer.fromJson<String>(json['hmacSignature']),
       nonce: serializer.fromJson<String>(json['nonce']),
       syncStatus: serializer.fromJson<String>(json['syncStatus']),
@@ -937,10 +1007,13 @@ class GateEvent extends DataClass implements Insertable<GateEvent> {
       'gpsLng': serializer.toJson<double>(gpsLng),
       'gpsAccuracy': serializer.toJson<double>(gpsAccuracy),
       'gateId': serializer.toJson<String>(gateId),
+      'geofenceId': serializer.toJson<String?>(geofenceId),
       'trueTimestamp': serializer.toJson<String>(trueTimestamp),
       'phoneTimestamp': serializer.toJson<String>(phoneTimestamp),
       'clockDeltaMs': serializer.toJson<int>(clockDeltaMs),
       'faceConfidence': serializer.toJson<double>(faceConfidence),
+      'embeddingHash': serializer.toJson<String?>(embeddingHash),
+      'totpHash': serializer.toJson<String?>(totpHash),
       'hmacSignature': serializer.toJson<String>(hmacSignature),
       'nonce': serializer.toJson<String>(nonce),
       'syncStatus': serializer.toJson<String>(syncStatus),
@@ -963,10 +1036,13 @@ class GateEvent extends DataClass implements Insertable<GateEvent> {
           double? gpsLng,
           double? gpsAccuracy,
           String? gateId,
+          Value<String?> geofenceId = const Value.absent(),
           String? trueTimestamp,
           String? phoneTimestamp,
           int? clockDeltaMs,
           double? faceConfidence,
+          Value<String?> embeddingHash = const Value.absent(),
+          Value<String?> totpHash = const Value.absent(),
           String? hmacSignature,
           String? nonce,
           String? syncStatus,
@@ -992,10 +1068,14 @@ class GateEvent extends DataClass implements Insertable<GateEvent> {
         gpsLng: gpsLng ?? this.gpsLng,
         gpsAccuracy: gpsAccuracy ?? this.gpsAccuracy,
         gateId: gateId ?? this.gateId,
+        geofenceId: geofenceId.present ? geofenceId.value : this.geofenceId,
         trueTimestamp: trueTimestamp ?? this.trueTimestamp,
         phoneTimestamp: phoneTimestamp ?? this.phoneTimestamp,
         clockDeltaMs: clockDeltaMs ?? this.clockDeltaMs,
         faceConfidence: faceConfidence ?? this.faceConfidence,
+        embeddingHash:
+            embeddingHash.present ? embeddingHash.value : this.embeddingHash,
+        totpHash: totpHash.present ? totpHash.value : this.totpHash,
         hmacSignature: hmacSignature ?? this.hmacSignature,
         nonce: nonce ?? this.nonce,
         syncStatus: syncStatus ?? this.syncStatus,
@@ -1026,6 +1106,8 @@ class GateEvent extends DataClass implements Insertable<GateEvent> {
       gpsAccuracy:
           data.gpsAccuracy.present ? data.gpsAccuracy.value : this.gpsAccuracy,
       gateId: data.gateId.present ? data.gateId.value : this.gateId,
+      geofenceId:
+          data.geofenceId.present ? data.geofenceId.value : this.geofenceId,
       trueTimestamp: data.trueTimestamp.present
           ? data.trueTimestamp.value
           : this.trueTimestamp,
@@ -1038,6 +1120,10 @@ class GateEvent extends DataClass implements Insertable<GateEvent> {
       faceConfidence: data.faceConfidence.present
           ? data.faceConfidence.value
           : this.faceConfidence,
+      embeddingHash: data.embeddingHash.present
+          ? data.embeddingHash.value
+          : this.embeddingHash,
+      totpHash: data.totpHash.present ? data.totpHash.value : this.totpHash,
       hmacSignature: data.hmacSignature.present
           ? data.hmacSignature.value
           : this.hmacSignature,
@@ -1068,10 +1154,13 @@ class GateEvent extends DataClass implements Insertable<GateEvent> {
           ..write('gpsLng: $gpsLng, ')
           ..write('gpsAccuracy: $gpsAccuracy, ')
           ..write('gateId: $gateId, ')
+          ..write('geofenceId: $geofenceId, ')
           ..write('trueTimestamp: $trueTimestamp, ')
           ..write('phoneTimestamp: $phoneTimestamp, ')
           ..write('clockDeltaMs: $clockDeltaMs, ')
           ..write('faceConfidence: $faceConfidence, ')
+          ..write('embeddingHash: $embeddingHash, ')
+          ..write('totpHash: $totpHash, ')
           ..write('hmacSignature: $hmacSignature, ')
           ..write('nonce: $nonce, ')
           ..write('syncStatus: $syncStatus, ')
@@ -1096,10 +1185,13 @@ class GateEvent extends DataClass implements Insertable<GateEvent> {
         gpsLng,
         gpsAccuracy,
         gateId,
+        geofenceId,
         trueTimestamp,
         phoneTimestamp,
         clockDeltaMs,
         faceConfidence,
+        embeddingHash,
+        totpHash,
         hmacSignature,
         nonce,
         syncStatus,
@@ -1123,10 +1215,13 @@ class GateEvent extends DataClass implements Insertable<GateEvent> {
           other.gpsLng == this.gpsLng &&
           other.gpsAccuracy == this.gpsAccuracy &&
           other.gateId == this.gateId &&
+          other.geofenceId == this.geofenceId &&
           other.trueTimestamp == this.trueTimestamp &&
           other.phoneTimestamp == this.phoneTimestamp &&
           other.clockDeltaMs == this.clockDeltaMs &&
           other.faceConfidence == this.faceConfidence &&
+          other.embeddingHash == this.embeddingHash &&
+          other.totpHash == this.totpHash &&
           other.hmacSignature == this.hmacSignature &&
           other.nonce == this.nonce &&
           other.syncStatus == this.syncStatus &&
@@ -1148,10 +1243,13 @@ class GateEventsCompanion extends UpdateCompanion<GateEvent> {
   final Value<double> gpsLng;
   final Value<double> gpsAccuracy;
   final Value<String> gateId;
+  final Value<String?> geofenceId;
   final Value<String> trueTimestamp;
   final Value<String> phoneTimestamp;
   final Value<int> clockDeltaMs;
   final Value<double> faceConfidence;
+  final Value<String?> embeddingHash;
+  final Value<String?> totpHash;
   final Value<String> hmacSignature;
   final Value<String> nonce;
   final Value<String> syncStatus;
@@ -1172,10 +1270,13 @@ class GateEventsCompanion extends UpdateCompanion<GateEvent> {
     this.gpsLng = const Value.absent(),
     this.gpsAccuracy = const Value.absent(),
     this.gateId = const Value.absent(),
+    this.geofenceId = const Value.absent(),
     this.trueTimestamp = const Value.absent(),
     this.phoneTimestamp = const Value.absent(),
     this.clockDeltaMs = const Value.absent(),
     this.faceConfidence = const Value.absent(),
+    this.embeddingHash = const Value.absent(),
+    this.totpHash = const Value.absent(),
     this.hmacSignature = const Value.absent(),
     this.nonce = const Value.absent(),
     this.syncStatus = const Value.absent(),
@@ -1197,10 +1298,13 @@ class GateEventsCompanion extends UpdateCompanion<GateEvent> {
     required double gpsLng,
     required double gpsAccuracy,
     required String gateId,
+    this.geofenceId = const Value.absent(),
     required String trueTimestamp,
     required String phoneTimestamp,
     required int clockDeltaMs,
     required double faceConfidence,
+    this.embeddingHash = const Value.absent(),
+    this.totpHash = const Value.absent(),
     required String hmacSignature,
     required String nonce,
     this.syncStatus = const Value.absent(),
@@ -1235,10 +1339,13 @@ class GateEventsCompanion extends UpdateCompanion<GateEvent> {
     Expression<double>? gpsLng,
     Expression<double>? gpsAccuracy,
     Expression<String>? gateId,
+    Expression<String>? geofenceId,
     Expression<String>? trueTimestamp,
     Expression<String>? phoneTimestamp,
     Expression<int>? clockDeltaMs,
     Expression<double>? faceConfidence,
+    Expression<String>? embeddingHash,
+    Expression<String>? totpHash,
     Expression<String>? hmacSignature,
     Expression<String>? nonce,
     Expression<String>? syncStatus,
@@ -1261,10 +1368,13 @@ class GateEventsCompanion extends UpdateCompanion<GateEvent> {
       if (gpsLng != null) 'gps_lng': gpsLng,
       if (gpsAccuracy != null) 'gps_accuracy': gpsAccuracy,
       if (gateId != null) 'gate_id': gateId,
+      if (geofenceId != null) 'geofence_id': geofenceId,
       if (trueTimestamp != null) 'true_timestamp': trueTimestamp,
       if (phoneTimestamp != null) 'phone_timestamp': phoneTimestamp,
       if (clockDeltaMs != null) 'clock_delta_ms': clockDeltaMs,
       if (faceConfidence != null) 'face_confidence': faceConfidence,
+      if (embeddingHash != null) 'embedding_hash': embeddingHash,
+      if (totpHash != null) 'totp_hash': totpHash,
       if (hmacSignature != null) 'hmac_signature': hmacSignature,
       if (nonce != null) 'nonce': nonce,
       if (syncStatus != null) 'sync_status': syncStatus,
@@ -1288,10 +1398,13 @@ class GateEventsCompanion extends UpdateCompanion<GateEvent> {
       Value<double>? gpsLng,
       Value<double>? gpsAccuracy,
       Value<String>? gateId,
+      Value<String?>? geofenceId,
       Value<String>? trueTimestamp,
       Value<String>? phoneTimestamp,
       Value<int>? clockDeltaMs,
       Value<double>? faceConfidence,
+      Value<String?>? embeddingHash,
+      Value<String?>? totpHash,
       Value<String>? hmacSignature,
       Value<String>? nonce,
       Value<String>? syncStatus,
@@ -1312,10 +1425,13 @@ class GateEventsCompanion extends UpdateCompanion<GateEvent> {
       gpsLng: gpsLng ?? this.gpsLng,
       gpsAccuracy: gpsAccuracy ?? this.gpsAccuracy,
       gateId: gateId ?? this.gateId,
+      geofenceId: geofenceId ?? this.geofenceId,
       trueTimestamp: trueTimestamp ?? this.trueTimestamp,
       phoneTimestamp: phoneTimestamp ?? this.phoneTimestamp,
       clockDeltaMs: clockDeltaMs ?? this.clockDeltaMs,
       faceConfidence: faceConfidence ?? this.faceConfidence,
+      embeddingHash: embeddingHash ?? this.embeddingHash,
+      totpHash: totpHash ?? this.totpHash,
       hmacSignature: hmacSignature ?? this.hmacSignature,
       nonce: nonce ?? this.nonce,
       syncStatus: syncStatus ?? this.syncStatus,
@@ -1365,6 +1481,9 @@ class GateEventsCompanion extends UpdateCompanion<GateEvent> {
     if (gateId.present) {
       map['gate_id'] = Variable<String>(gateId.value);
     }
+    if (geofenceId.present) {
+      map['geofence_id'] = Variable<String>(geofenceId.value);
+    }
     if (trueTimestamp.present) {
       map['true_timestamp'] = Variable<String>(trueTimestamp.value);
     }
@@ -1376,6 +1495,12 @@ class GateEventsCompanion extends UpdateCompanion<GateEvent> {
     }
     if (faceConfidence.present) {
       map['face_confidence'] = Variable<double>(faceConfidence.value);
+    }
+    if (embeddingHash.present) {
+      map['embedding_hash'] = Variable<String>(embeddingHash.value);
+    }
+    if (totpHash.present) {
+      map['totp_hash'] = Variable<String>(totpHash.value);
     }
     if (hmacSignature.present) {
       map['hmac_signature'] = Variable<String>(hmacSignature.value);
@@ -1416,10 +1541,13 @@ class GateEventsCompanion extends UpdateCompanion<GateEvent> {
           ..write('gpsLng: $gpsLng, ')
           ..write('gpsAccuracy: $gpsAccuracy, ')
           ..write('gateId: $gateId, ')
+          ..write('geofenceId: $geofenceId, ')
           ..write('trueTimestamp: $trueTimestamp, ')
           ..write('phoneTimestamp: $phoneTimestamp, ')
           ..write('clockDeltaMs: $clockDeltaMs, ')
           ..write('faceConfidence: $faceConfidence, ')
+          ..write('embeddingHash: $embeddingHash, ')
+          ..write('totpHash: $totpHash, ')
           ..write('hmacSignature: $hmacSignature, ')
           ..write('nonce: $nonce, ')
           ..write('syncStatus: $syncStatus, ')
@@ -2904,10 +3032,13 @@ typedef $$GateEventsTableCreateCompanionBuilder = GateEventsCompanion Function({
   required double gpsLng,
   required double gpsAccuracy,
   required String gateId,
+  Value<String?> geofenceId,
   required String trueTimestamp,
   required String phoneTimestamp,
   required int clockDeltaMs,
   required double faceConfidence,
+  Value<String?> embeddingHash,
+  Value<String?> totpHash,
   required String hmacSignature,
   required String nonce,
   Value<String> syncStatus,
@@ -2929,10 +3060,13 @@ typedef $$GateEventsTableUpdateCompanionBuilder = GateEventsCompanion Function({
   Value<double> gpsLng,
   Value<double> gpsAccuracy,
   Value<String> gateId,
+  Value<String?> geofenceId,
   Value<String> trueTimestamp,
   Value<String> phoneTimestamp,
   Value<int> clockDeltaMs,
   Value<double> faceConfidence,
+  Value<String?> embeddingHash,
+  Value<String?> totpHash,
   Value<String> hmacSignature,
   Value<String> nonce,
   Value<String> syncStatus,
@@ -2991,6 +3125,9 @@ class $$GateEventsTableFilterComposer
   ColumnFilters<String> get gateId => $composableBuilder(
       column: $table.gateId, builder: (column) => ColumnFilters(column));
 
+  ColumnFilters<String> get geofenceId => $composableBuilder(
+      column: $table.geofenceId, builder: (column) => ColumnFilters(column));
+
   ColumnFilters<String> get trueTimestamp => $composableBuilder(
       column: $table.trueTimestamp, builder: (column) => ColumnFilters(column));
 
@@ -3004,6 +3141,12 @@ class $$GateEventsTableFilterComposer
   ColumnFilters<double> get faceConfidence => $composableBuilder(
       column: $table.faceConfidence,
       builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get embeddingHash => $composableBuilder(
+      column: $table.embeddingHash, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get totpHash => $composableBuilder(
+      column: $table.totpHash, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get hmacSignature => $composableBuilder(
       column: $table.hmacSignature, builder: (column) => ColumnFilters(column));
@@ -3074,6 +3217,9 @@ class $$GateEventsTableOrderingComposer
   ColumnOrderings<String> get gateId => $composableBuilder(
       column: $table.gateId, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get geofenceId => $composableBuilder(
+      column: $table.geofenceId, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get trueTimestamp => $composableBuilder(
       column: $table.trueTimestamp,
       builder: (column) => ColumnOrderings(column));
@@ -3089,6 +3235,13 @@ class $$GateEventsTableOrderingComposer
   ColumnOrderings<double> get faceConfidence => $composableBuilder(
       column: $table.faceConfidence,
       builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get embeddingHash => $composableBuilder(
+      column: $table.embeddingHash,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get totpHash => $composableBuilder(
+      column: $table.totpHash, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<String> get hmacSignature => $composableBuilder(
       column: $table.hmacSignature,
@@ -3156,6 +3309,9 @@ class $$GateEventsTableAnnotationComposer
   GeneratedColumn<String> get gateId =>
       $composableBuilder(column: $table.gateId, builder: (column) => column);
 
+  GeneratedColumn<String> get geofenceId => $composableBuilder(
+      column: $table.geofenceId, builder: (column) => column);
+
   GeneratedColumn<String> get trueTimestamp => $composableBuilder(
       column: $table.trueTimestamp, builder: (column) => column);
 
@@ -3167,6 +3323,12 @@ class $$GateEventsTableAnnotationComposer
 
   GeneratedColumn<double> get faceConfidence => $composableBuilder(
       column: $table.faceConfidence, builder: (column) => column);
+
+  GeneratedColumn<String> get embeddingHash => $composableBuilder(
+      column: $table.embeddingHash, builder: (column) => column);
+
+  GeneratedColumn<String> get totpHash =>
+      $composableBuilder(column: $table.totpHash, builder: (column) => column);
 
   GeneratedColumn<String> get hmacSignature => $composableBuilder(
       column: $table.hmacSignature, builder: (column) => column);
@@ -3222,10 +3384,13 @@ class $$GateEventsTableTableManager extends RootTableManager<
             Value<double> gpsLng = const Value.absent(),
             Value<double> gpsAccuracy = const Value.absent(),
             Value<String> gateId = const Value.absent(),
+            Value<String?> geofenceId = const Value.absent(),
             Value<String> trueTimestamp = const Value.absent(),
             Value<String> phoneTimestamp = const Value.absent(),
             Value<int> clockDeltaMs = const Value.absent(),
             Value<double> faceConfidence = const Value.absent(),
+            Value<String?> embeddingHash = const Value.absent(),
+            Value<String?> totpHash = const Value.absent(),
             Value<String> hmacSignature = const Value.absent(),
             Value<String> nonce = const Value.absent(),
             Value<String> syncStatus = const Value.absent(),
@@ -3247,10 +3412,13 @@ class $$GateEventsTableTableManager extends RootTableManager<
             gpsLng: gpsLng,
             gpsAccuracy: gpsAccuracy,
             gateId: gateId,
+            geofenceId: geofenceId,
             trueTimestamp: trueTimestamp,
             phoneTimestamp: phoneTimestamp,
             clockDeltaMs: clockDeltaMs,
             faceConfidence: faceConfidence,
+            embeddingHash: embeddingHash,
+            totpHash: totpHash,
             hmacSignature: hmacSignature,
             nonce: nonce,
             syncStatus: syncStatus,
@@ -3272,10 +3440,13 @@ class $$GateEventsTableTableManager extends RootTableManager<
             required double gpsLng,
             required double gpsAccuracy,
             required String gateId,
+            Value<String?> geofenceId = const Value.absent(),
             required String trueTimestamp,
             required String phoneTimestamp,
             required int clockDeltaMs,
             required double faceConfidence,
+            Value<String?> embeddingHash = const Value.absent(),
+            Value<String?> totpHash = const Value.absent(),
             required String hmacSignature,
             required String nonce,
             Value<String> syncStatus = const Value.absent(),
@@ -3297,10 +3468,13 @@ class $$GateEventsTableTableManager extends RootTableManager<
             gpsLng: gpsLng,
             gpsAccuracy: gpsAccuracy,
             gateId: gateId,
+            geofenceId: geofenceId,
             trueTimestamp: trueTimestamp,
             phoneTimestamp: phoneTimestamp,
             clockDeltaMs: clockDeltaMs,
             faceConfidence: faceConfidence,
+            embeddingHash: embeddingHash,
+            totpHash: totpHash,
             hmacSignature: hmacSignature,
             nonce: nonce,
             syncStatus: syncStatus,

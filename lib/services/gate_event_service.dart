@@ -243,6 +243,8 @@ class EventResult {
   final int       clockDeltaMs;
   final AuthPhase? failedPhase;
   final String?    failMessage;
+  final Map<String, dynamic>? payload;
+  final dynamic signed;
 
   const EventResult._({
     required this.success,
@@ -254,6 +256,8 @@ class EventResult {
     this.clockDeltaMs     = 0,
     this.failedPhase,
     this.failMessage,
+    this.payload,
+    this.signed,
   });
 
   factory EventResult.success({
@@ -263,6 +267,8 @@ class EventResult {
     required double gpsDistance,
     required double gpsAccuracy,
     required int    clockDeltaMs,
+    Map<String, dynamic>? payload,
+    dynamic signed,
   }) => EventResult._(
     success          : true,
     eventId          : eventId,
@@ -271,6 +277,8 @@ class EventResult {
     gpsDistance      : gpsDistance,
     gpsAccuracy      : gpsAccuracy,
     clockDeltaMs     : clockDeltaMs,
+    payload          : payload,
+    signed           : signed,
   );
 
   factory EventResult.fail(AuthPhase phase, String message) => EventResult._(
