@@ -9,6 +9,7 @@ import 'screens/home_screen.dart';
 import 'screens/checkout_screen.dart';
 import 'screens/checkin_screen.dart';
 import 'screens/history_screen.dart';
+import 'screens/startup_face_gate_screen.dart';
 import 'services/sync_service.dart';
 import 'utils/app_theme.dart';
 
@@ -70,6 +71,7 @@ class SentinelGateApp extends StatelessWidget {
       routes: {
         '/'         : (_) => const SplashScreen(),
         '/login'    : (_) => const LoginScreen(),
+        '/face-gate': (_) => const StartupFaceGateScreen(),
         '/home'     : (_) => const HomeScreen(),
         '/checkout' : (_) => const CheckoutScreen(),
         '/checkin'  : (_) => const CheckinScreen(),

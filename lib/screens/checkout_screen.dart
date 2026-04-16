@@ -36,6 +36,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   // Step 1 — QR
   QrPayload? _qr;
   bool       _qrDone = false;
+  bool       _handlingQr = false;
+  DateTime?  _lastQrHintAt;
+  final MobileScannerController _qrScannerController = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+  );
 
   // Step 2 — Face
   CameraController? _cam;
@@ -56,9 +61,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   void dispose() {
+    _qrScannerController.dispose();
     _cam?.dispose();
     FaceService.dispose();
     super.dispose();
+  }
+
+  Future<void> _restartQrScanner() async {
+    try {
+      await _qrScannerController.start();
+    } catch (_) {}
+  }
+
+  void _showQrHint(String message) {
+    final now = DateTime.now();
+    if (_lastQrHintAt != null && now.difference(_lastQrHintAt!) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastQrHintAt = now;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -135,7 +157,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ],
       const SizedBox(height: 28),
       ElevatedButton(
-        onPressed: () => setState(() => _step = _stepQr),
+        onPressed: () {
+          setState(() => _step = _stepQr);
+          _restartQrScanner();
+        },
         child: const Text('Continue to Gate QR Scan'),
       ),
     ]);
@@ -167,25 +192,52 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       style: const TextStyle(color: Colors.grey, fontSize: 12)),
                 ]),
               )
-            : MobileScanner(onDetect: (capture) {
-                if (_qrDone) return;
-                final raw = capture.barcodes.firstOrNull?.rawValue ?? '';
-                final payload = TotpService.parseQr(raw);
-                if (payload == null) return;
-                final err = TotpService.validate(payload);
-                if (err != null) {
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text(err)));
-                  return;
-                }
-                setState(() { _qr = payload; _qrDone = true; });
-                Future.delayed(const Duration(milliseconds: 600), () {
-                  if (mounted) {
-                    setState(() => _step = _stepFace);
-                    _initCamera();
+            : MobileScanner(
+                controller: _qrScannerController,
+                onDetect: (capture) {
+                  if (_qrDone || _handlingQr) return;
+                  _handlingQr = true;
+
+                  QrPayload? valid;
+                  bool sawNonEmptyRaw = false;
+                  String? lastValidationError;
+                  for (final code in capture.barcodes) {
+                    final raw = code.rawValue?.trim() ?? '';
+                    if (raw.isEmpty) continue;
+                    sawNonEmptyRaw = true;
+                    final parsed = TotpService.parseQr(raw);
+                    if (parsed == null) continue;
+                    final err = TotpService.validate(parsed);
+                    if (err == null) {
+                      valid = parsed;
+                      break;
+                    }
+                    lastValidationError = err;
                   }
-                });
-              }),
+
+                  if (valid == null) {
+                    if (lastValidationError != null) {
+                      _showQrHint(lastValidationError);
+                    } else if (sawNonEmptyRaw) {
+                      _showQrHint('QR detected but format not supported. Please use the live gate QR.');
+                    }
+                    _handlingQr = false;
+                    return;
+                  }
+
+                  _qrScannerController.stop();
+                  setState(() {
+                    _qr = valid;
+                    _qrDone = true;
+                  });
+                  Future.delayed(const Duration(milliseconds: 600), () {
+                    if (mounted) {
+                      setState(() => _step = _stepFace);
+                      _initCamera();
+                    }
+                  });
+                },
+              ),
       ),
       const SizedBox(height: 16),
       _InfoBox(
@@ -196,7 +248,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                  'are rejected by cryptographic timestamp verification.',
       ),
       const SizedBox(height: 16),
-      TextButton(onPressed: () => setState(() => _step = _stepReason),
+      TextButton(onPressed: () {
+        _handlingQr = false;
+        setState(() => _step = _stepReason);
+      },
           child: const Text('Back')),
     ]);
   }
@@ -253,9 +308,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ),
       const SizedBox(height: 8),
       TextButton(
-        onPressed: () => setState(() {
-          _step = _stepQr; _qrDone = false; _qr = null; _faceResult = null;
-        }),
+        onPressed: () {
+          setState(() {
+            _step = _stepQr;
+            _qrDone = false;
+            _qr = null;
+            _faceResult = null;
+          });
+          _handlingQr = false;
+          _restartQrScanner();
+        },
         child: const Text('Back'),
       ),
     ]);
@@ -276,7 +338,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       // All checks passed — run full pipeline
       setState(() => _processing = true);
       final studentId = await CryptoService.getStudentId();
-      if (studentId == null || _qr == null) return;
+      if (studentId == null || _qr == null) {
+        setState(() => _processing = false);
+        return;
+      }
 
       final svc    = GateEventService(_db);
       final result = await svc.processExit(

@@ -65,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await CryptoService.setEnrolled();
 
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/home');
+      Navigator.pushReplacementNamed(context, '/face-gate');
     } catch (e) {
       setState(() { _error = 'Enrollment failed: $e'; _loading = false; });
     }

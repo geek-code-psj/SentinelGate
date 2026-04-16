@@ -54,7 +54,7 @@ class _SplashScreenState extends State<SplashScreen>
     SyncService.runBackgroundSync().catchError((_) {});
 
     await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) Navigator.pushReplacementNamed(context, '/home');
+    if (mounted) Navigator.pushReplacementNamed(context, '/face-gate');
   }
 
   void _setStatus(String s) {

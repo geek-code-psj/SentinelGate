@@ -3,11 +3,33 @@
 class AppConstants {
 
   // ── Server endpoints ──────────────────────────────────────────────────────
+  /// Shared backend root, used for health/time fallback checks.
+  static const String backendRootUrl = String.fromEnvironment(
+    'SG_BACKEND_ROOT_URL',
+    defaultValue: 'https://sentinelgateweb-production.up.railway.app',
+  );
+
   /// Primary: Local campus intranet server (fast, used on campus WiFi)
-  static const String intranetBaseUrl = 'http://192.168.1.100:3000/api/v1';
+  static const String intranetBaseUrl = String.fromEnvironment(
+    'SG_INTRANET_BASE_URL',
+    defaultValue: 'https://sentinelgateweb-production.up.railway.app/api/v1',
+  );
 
   /// Fallback: Cloud server (used on 4G when intranet is unreachable)
-  static const String cloudBaseUrl = 'https://sentinelgate.yourdomain.com/api/v1';
+  static const String cloudBaseUrl = String.fromEnvironment(
+    'SG_CLOUD_BASE_URL',
+    defaultValue: 'https://sentinelgateweb-production.up.railway.app/api/v1',
+  );
+
+  /// Public URLs for gate/admin web surfaces used in deployment docs.
+  static const String gateQrWebUrl = String.fromEnvironment(
+    'SG_GATE_QR_WEB_URL',
+    defaultValue: 'https://sentinel-gateweb-4sdy-5xlaqwa20.vercel.app/',
+  );
+  static const String adminWebUrl = String.fromEnvironment(
+    'SG_ADMIN_WEB_URL',
+    defaultValue: 'https://sentinel-gateweb-ejdf-im2a9shr3.vercel.app/',
+  );
 
   // ── Geofence ──────────────────────────────────────────────────────────────
   /// Default gate radius in metres. Server can override per gate.
@@ -44,6 +66,7 @@ class AppConstants {
 
   /// QR format: sentinelgate://{gateId}/{totpToken}/{sessionNonce}
   static const String qrScheme = 'sentinelgate://';
+  static const String qrAltScheme = 'sentinel://';
 
   // ── Leave duration thresholds ─────────────────────────────────────────────
   /// If expected absence > this, warden approval doc is required

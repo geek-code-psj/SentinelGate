@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:cryptography/cryptography.dart';
 import 'sntp_service.dart';
 import '../utils/constants.dart';
@@ -21,27 +22,132 @@ class TotpService {
   // ── Parse ──────────────────────────────────────────────────────────────────
 
   static QrPayload? parseQr(String raw) {
-    if (!raw.startsWith(AppConstants.qrScheme)) return null;
+    final text = raw.trim();
+    if (text.isEmpty) return null;
 
-    final path   = raw.substring(AppConstants.qrScheme.length);
-    final parts  = path.split('/');
+    final fromJson = _parseJsonPayload(text);
+    if (fromJson != null) return fromJson;
+
+    final fromUri = _parseUriPayload(text);
+    if (fromUri != null) return fromUri;
+
+    final fromDelimited = _parseDelimitedPayload(text);
+    if (fromDelimited != null) return fromDelimited;
+
+    return null;
+  }
+
+  static QrPayload? _parseUriPayload(String raw) {
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return null;
+
+    if (raw.startsWith(AppConstants.qrScheme) ||
+        raw.startsWith(AppConstants.qrAltScheme)) {
+      final allSegments = [
+        if (uri.host.isNotEmpty) uri.host,
+        ...uri.pathSegments,
+      ];
+      if (allSegments.length < 4) return null;
+      return _buildPayload(
+        gateId: allSegments[0],
+        totpValue: allSegments[1],
+        nonce: allSegments[2],
+        expiresAtRaw: allSegments[3],
+      );
+    }
+
+    if (uri.scheme == 'http' || uri.scheme == 'https') {
+      final qp = uri.queryParameters;
+      final embedded = qp['payload'] ?? qp['data'] ?? qp['qr'] ?? qp['code'];
+      if (embedded != null && embedded.trim().isNotEmpty) {
+        final parsedEmbedded = parseQr(Uri.decodeComponent(embedded));
+        if (parsedEmbedded != null) return parsedEmbedded;
+      }
+
+      final gateId = qp['gate_id'] ?? qp['gateId'];
+      final totp = qp['totp'] ?? qp['totp_token'] ?? qp['token'];
+      final nonce = qp['session_nonce'] ?? qp['nonce'] ?? qp['sessionNonce'];
+      final expires = qp['expires_at'] ?? qp['expiresAt'] ?? qp['exp'];
+      if (gateId == null || totp == null || nonce == null || expires == null) {
+        return null;
+      }
+      return _buildPayload(
+        gateId: gateId,
+        totpValue: totp,
+        nonce: nonce,
+        expiresAtRaw: expires,
+      );
+    }
+
+    return null;
+  }
+
+  static QrPayload? _parseJsonPayload(String raw) {
+    if (!raw.startsWith('{')) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      final map = Map<String, dynamic>.from(decoded);
+      return _buildPayload(
+        gateId: (map['gate_id'] ?? map['gateId'] ?? '').toString(),
+        totpValue: (map['totp'] ?? map['totp_token'] ?? map['token'] ?? '').toString(),
+        nonce: (map['session_nonce'] ?? map['sessionNonce'] ?? map['nonce'] ?? '').toString(),
+        expiresAtRaw: map['expires_at'] ?? map['expiresAt'] ?? map['exp'],
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static QrPayload? _parseDelimitedPayload(String raw) {
+    final parts = raw.split(RegExp(r'[|,/]')).map((e) => e.trim()).toList();
     if (parts.length < 4) return null;
+    return _buildPayload(
+      gateId: parts[0],
+      totpValue: parts[1],
+      nonce: parts[2],
+      expiresAtRaw: parts[3],
+    );
+  }
 
-    final gateId     = parts[0];
-    final totpValue  = parts[1];
-    final nonce      = parts[2];
-    final expiresAt  = int.tryParse(parts[3]);
+  static QrPayload? _buildPayload({
+    required String gateId,
+    required String totpValue,
+    required String nonce,
+    required dynamic expiresAtRaw,
+  }) {
+    final normalizedGate = gateId.trim();
+    final normalizedTotp = totpValue.trim();
+    final normalizedNonce = nonce.trim();
+    final expiresAt = _parseExpiry(expiresAtRaw);
 
-    if (gateId.isEmpty || totpValue.isEmpty || nonce.isEmpty || expiresAt == null) {
+    if (normalizedGate.isEmpty ||
+        normalizedTotp.isEmpty ||
+        normalizedNonce.isEmpty ||
+        expiresAt == null) {
       return null;
     }
 
     return QrPayload(
-      gateId    : gateId,
-      totpValue : totpValue,
-      nonce     : nonce,
+      gateId    : normalizedGate,
+      totpValue : normalizedTotp,
+      nonce     : normalizedNonce,
       expiresAt : expiresAt,
     );
+  }
+
+  static int? _parseExpiry(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is num) {
+      final value = raw.toInt();
+      return value < 1000000000000 ? value * 1000 : value;
+    }
+    final text = raw.toString().trim();
+    if (text.isEmpty) return null;
+    final asInt = int.tryParse(text);
+    if (asInt != null) return asInt < 1000000000000 ? asInt * 1000 : asInt;
+    final asDate = DateTime.tryParse(text);
+    return asDate?.toUtc().millisecondsSinceEpoch;
   }
 
   // ── Validate ───────────────────────────────────────────────────────────────
@@ -56,12 +162,6 @@ class TotpService {
       return 'QR code expired ${agoSec}s ago. Ask warden to refresh.';
     }
 
-    // Warn if token is about to expire (< 5 seconds left)
-    final remaining = qr.expiresAt - now;
-    if (remaining < 5000) {
-      return 'QR code expires in ${(remaining / 1000).ceil()}s. '
-             'Proceed quickly or ask warden to refresh.';
-    }
 
     return null; // null = valid
   }

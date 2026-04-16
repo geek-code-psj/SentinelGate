@@ -31,6 +31,8 @@ class CryptoService {
   static const _kEnrolled   = 'sg_enrolled';
   static const _kHmacSecret = 'sg_hmac_secret';
   static const _kDeviceId  = 'sg_device_id';
+  static const _kFaceTemplate = 'sg_face_template_v1';
+  static const _kFaceBaselineHash = 'sg_face_baseline_hash_v1';
 
   static final _hmac   = Hmac.sha256();
   static final _sha256 = Sha256();
@@ -69,6 +71,34 @@ class CryptoService {
 
   /// Get the device ID (for x-device-id header)
   static Future<String?> getDeviceId() => _storage.read(key: _kDeviceId);
+
+  /// Stores a face template (normalised landmark vector) for local verification.
+  static Future<void> saveFaceTemplate(List<double> template) =>
+      _storage.write(
+        key: _kFaceTemplate,
+        value: template.map((v) => v.toStringAsFixed(6)).join(','),
+      );
+
+  /// Returns the stored face template, or null if not enrolled yet.
+  static Future<List<double>?> getFaceTemplate() async {
+    final raw = await _storage.read(key: _kFaceTemplate);
+    if (raw == null || raw.isEmpty) return null;
+    final parsed = raw
+        .split(',')
+        .map((s) => double.tryParse(s.trim()))
+        .whereType<double>()
+        .toList(growable: false);
+    return parsed.isEmpty ? null : parsed;
+  }
+
+  static Future<void> saveFaceBaselineHash(String hash) =>
+      _storage.write(key: _kFaceBaselineHash, value: hash);
+
+  static Future<String?> getFaceBaselineHash() =>
+      _storage.read(key: _kFaceBaselineHash);
+
+  static Future<bool> hasFaceBaseline() async =>
+      (await _storage.read(key: _kFaceTemplate)) != null;
 
   static Future<void> clearAll() => _storage.deleteAll();
 

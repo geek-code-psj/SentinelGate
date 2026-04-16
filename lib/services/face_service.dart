@@ -103,13 +103,15 @@ class FaceService {
       );
     }
 
-    // ── Build face embedding hash ────────────────────────────────────────────
-    final hash = await _buildEmbeddingHash(face);
+    // ── Build face embedding template + hash ─────────────────────────────────
+    final template = _buildEmbeddingTemplate(face);
+    final hash = await _buildEmbeddingHash(template);
 
     return FaceResult(
       passed         : true,
       livenessScore  : score,
       embeddingHash  : hash,
+      embeddingTemplate: template,
       leftEyeProb    : leftEye,
       rightEyeProb   : rightEye,
       headYaw        : yaw,
@@ -123,9 +125,9 @@ class FaceService {
   ///
   /// Process: normalise landmark (x,y) by bounding box → pack as float32 bytes
   ///          → SHA-256 → hex string.
-  static Future<String> _buildEmbeddingHash(Face face) async {
-    final buf = BytesBuilder();
+  static List<double> _buildEmbeddingTemplate(Face face) {
     final bbox = face.boundingBox;
+    final out = <double>[];
 
     for (final type in [
       FaceLandmarkType.leftEye,
@@ -137,15 +139,24 @@ class FaceService {
       FaceLandmarkType.rightMouth,
     ]) {
       final lm = face.landmarks[type];
-      if (lm == null) continue;
+      if (lm == null || bbox.width == 0 || bbox.height == 0) {
+        out..add(-1.0)..add(-1.0);
+        continue;
+      }
 
-      // Normalise to [0,1] within bounding box — pose-invariant
       final nx = ((lm.position.x - bbox.left) / bbox.width).clamp(0.0, 1.0);
-      final ny = ((lm.position.y - bbox.top)  / bbox.height).clamp(0.0, 1.0);
+      final ny = ((lm.position.y - bbox.top) / bbox.height).clamp(0.0, 1.0);
+      out..add(nx.toDouble())..add(ny.toDouble());
+    }
 
-      final xd = ByteData(4)..setFloat32(0, nx.toDouble());
-      final yd = ByteData(4)..setFloat32(0, ny.toDouble());
-      buf..add(xd.buffer.asUint8List())..add(yd.buffer.asUint8List());
+    return out;
+  }
+
+  static Future<String> _buildEmbeddingHash(List<double> template) async {
+    final buf = BytesBuilder();
+    for (final value in template) {
+      final xd = ByteData(4)..setFloat32(0, value.toDouble());
+      buf.add(xd.buffer.asUint8List());
     }
 
     return CryptoService.hashBytes(buf.toBytes());
@@ -160,6 +171,7 @@ class FaceResult {
   final bool    passed;
   final double  livenessScore;
   final String? embeddingHash;
+  final List<double>? embeddingTemplate;
   final double  leftEyeProb;
   final double  rightEyeProb;
   final double  headYaw;
@@ -171,6 +183,7 @@ class FaceResult {
     required this.passed,
     this.livenessScore  = 0.0,
     this.embeddingHash,
+    this.embeddingTemplate,
     this.leftEyeProb    = 0.0,
     this.rightEyeProb   = 0.0,
     this.headYaw        = 0.0,

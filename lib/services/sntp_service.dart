@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../utils/constants.dart';
 
@@ -20,6 +21,11 @@ class SntpService {
   static const _kDelta    = 'sg_clock_delta_ms';
   static const _kLastSync = 'sg_clock_last_sync';
   static const _maxStalenessMs = 15 * 60 * 1000; // 15 minutes
+  static const List<String> _timePaths = [
+    '/sync/time',
+    '/time',
+    '/health',
+  ];
 
   static int  _deltaMs = 0;
   static bool _synced  = false;
@@ -47,6 +53,9 @@ class SntpService {
       result = await _syncFrom(AppConstants.cloudBaseUrl);
     }
     if (!result.success) {
+      result = await _syncFrom(AppConstants.backendRootUrl);
+    }
+    if (!result.success) {
       result = await _loadCache();
     }
     return result;
@@ -58,27 +67,61 @@ class SntpService {
         connectTimeout: const Duration(seconds: 5),
         receiveTimeout: const Duration(seconds: 5),
       ));
+      final root = baseUrl.endsWith('/')
+          ? baseUrl.substring(0, baseUrl.length - 1)
+          : baseUrl;
 
-      final t1 = DateTime.now().millisecondsSinceEpoch;
-      final res = await dio.get('$baseUrl/time');
-      final t4 = DateTime.now().millisecondsSinceEpoch;
+      for (final path in _timePaths) {
+        final t1 = DateTime.now().millisecondsSinceEpoch;
+        final res = await dio.get('$root$path');
+        final t4 = DateTime.now().millisecondsSinceEpoch;
 
-      if (res.statusCode != 200) return SntpResult.fail('HTTP ${res.statusCode}');
+        if (res.statusCode != 200) {
+          continue;
+        }
 
-      final serverMs = (res.data['server_utc_ms'] as num).toInt();
-      final rtt      = t4 - t1;
-      final delta    = (serverMs + rtt ~/ 2) - t4;
+        final serverMs = _parseServerMs(res.data);
+        if (serverMs == null) {
+          continue;
+        }
 
-      _deltaMs = delta;
-      _synced  = true;
+        final rtt = t4 - t1;
+        final delta = (serverMs + rtt ~/ 2) - t4;
 
-      await _storage.write(key: _kDelta,    value: delta.toString());
-      await _storage.write(key: _kLastSync, value: t4.toString());
+        _deltaMs = delta;
+        _synced = true;
 
-      return SntpResult(success: true, deltaMs: delta, rttMs: rtt);
+        await _storage.write(key: _kDelta, value: delta.toString());
+        await _storage.write(key: _kLastSync, value: t4.toString());
+
+        debugPrint('[SNTP] Synced via $path (delta=${delta}ms, rtt=${rtt}ms)');
+        return SntpResult(success: true, deltaMs: delta, rttMs: rtt);
+      }
+
+      return SntpResult.fail('No valid server time response: $baseUrl');
     } catch (_) {
       return SntpResult.fail('Unreachable: $baseUrl');
     }
+  }
+
+  static int? _parseServerMs(dynamic data) {
+    if (data is! Map) return null;
+
+    final asMap = Map<String, dynamic>.from(data);
+    final msValue = asMap['server_utc_ms'] ?? asMap['serverUtcMs'];
+    if (msValue is num) return msValue.toInt();
+    if (msValue is String) {
+      final parsed = int.tryParse(msValue);
+      if (parsed != null) return parsed;
+    }
+
+    final iso = asMap['ts'] ?? asMap['timestamp'] ?? asMap['server_time'];
+    if (iso is String) {
+      final dt = DateTime.tryParse(iso);
+      if (dt != null) return dt.toUtc().millisecondsSinceEpoch;
+    }
+
+    return null;
   }
 
   static Future<SntpResult> _loadCache() async {
