@@ -31,6 +31,7 @@ class GateEventService {
     required String      imagePath,
     required String      reason,
     DateTime?            expectedReturn,
+    bool                 writeToDb = true,
   }) async {
     return _process(
       studentId      : studentId,
@@ -39,6 +40,7 @@ class GateEventService {
       status         : 'OUT',
       reason         : reason,
       expectedReturn : expectedReturn,
+      writeToDb      : writeToDb,
     );
   }
 
@@ -65,6 +67,7 @@ class GateEventService {
     required String    status,
     required String    reason,
     DateTime?          expectedReturn,
+    bool               writeToDb = true,
   }) async {
 
     // ── Phase 2A: TOTP expiry re-check (SNTP time) ────────────────────────
@@ -182,33 +185,35 @@ class GateEventService {
     );
 
     // Write to local DB immediately — UI goes green before network call
-    await db.insertGateEvent(GateEventsCompanion(
-      eventId           : Value(eventId),
-      studentId         : Value(studentId),
-      status            : Value(status),
-      reason            : Value(reason),
-      expectedReturnIso : Value(expectedReturnIso),
-      expectedDurationMs: Value(expectedDurationMs),
-      requiresApproval  : Value(requiresApproval),
-      gpsLat            : Value(gps.lat),
-      gpsLng            : Value(gps.lng),
-      gpsAccuracy       : Value(gps.accuracy),
-      gateId            : Value(qr.gateId),
-      geofenceId        : Value(qr.geofenceId),
-      trueTimestamp     : Value(trueNow),
-      phoneTimestamp    : Value(phoneNow),
-      clockDeltaMs      : Value(deltaMs),
-      faceConfidence    : Value(face.livenessScore),
-      embeddingHash     : Value(face.embeddingHash),
-      totpHash          : Value(totpHashVal),
-      hmacSignature     : Value(signed.signature),
-      nonce             : Value(signed.nonce),
-      syncStatus        : Value(requiresApproval ? 'PENDING_APPROVAL' : 'PENDING'),
-    ));
+    if (writeToDb) {
+      await db.insertGateEvent(GateEventsCompanion(
+        eventId           : Value(eventId),
+        studentId         : Value(studentId),
+        status            : Value(status),
+        reason            : Value(reason),
+        expectedReturnIso : Value(expectedReturnIso),
+        expectedDurationMs: Value(expectedDurationMs),
+        requiresApproval  : Value(requiresApproval),
+        gpsLat            : Value(gps.lat),
+        gpsLng            : Value(gps.lng),
+        gpsAccuracy       : Value(gps.accuracy),
+        gateId            : Value(qr.gateId),
+        geofenceId        : Value(qr.geofenceId),
+        trueTimestamp     : Value(trueNow),
+        phoneTimestamp    : Value(phoneNow),
+        clockDeltaMs      : Value(deltaMs),
+        faceConfidence    : Value(face.livenessScore),
+        embeddingHash     : Value(face.embeddingHash),
+        totpHash          : Value(totpHashVal),
+        hmacSignature     : Value(signed.signature),
+        nonce             : Value(signed.nonce),
+        syncStatus        : Value(requiresApproval ? 'PENDING_APPROVAL' : 'PENDING'),
+      ));
 
-    // ── Phase 5: Network dispatch (fire-and-forget; WorkManager is backup) ─
-    if (!requiresApproval) {
-      SyncService.trySyncNow(eventId).catchError((_) {});
+      // ── Phase 5: Network dispatch (fire-and-forget; WorkManager is backup) ─
+      if (!requiresApproval) {
+        SyncService.trySyncNow(eventId).catchError((_) {});
+      }
     }
 
     return EventResult.success(
@@ -218,6 +223,8 @@ class GateEventService {
       gpsDistance      : geoCheck.distance,
       gpsAccuracy      : gps.accuracy,
       clockDeltaMs     : deltaMs,
+      payload          : payload,
+      signed           : signed,
     );
   }
 }
@@ -272,3 +279,54 @@ class EventResult {
     failMessage  : message,
   );
 }
+
+/// Helper to write a deferred event after approval
+Future<void> commitDeferredEvent({
+  required AppDatabase db,
+  required String eventId,
+  required String studentId,
+  required String status,
+  required String reason,
+  required String gateId,
+  required String? geofenceId,
+  required String expectedReturnIso,
+  required int expectedDurationMs,
+  required double gpsLat,
+  required double gpsLng,
+  required double gpsAccuracy,
+  required String trueTimestamp,
+  required String phoneTimestamp,
+  required int clockDeltaMs,
+  required double faceConfidence,
+  required String? embeddingHash,
+  required String? totpHash,
+  required String hmacSignature,
+  required String nonce,
+}) async {
+  await db.insertGateEvent(GateEventsCompanion(
+    eventId           : Value(eventId),
+    studentId         : Value(studentId),
+    status            : Value(status),
+    reason            : Value(reason),
+    expectedReturnIso : Value(expectedReturnIso),
+    expectedDurationMs: Value(expectedDurationMs),
+    requiresApproval  : const Value(true),
+    gpsLat            : Value(gpsLat),
+    gpsLng            : Value(gpsLng),
+    gpsAccuracy       : Value(gpsAccuracy),
+    gateId            : Value(gateId),
+    geofenceId        : Value(geofenceId),
+    trueTimestamp     : Value(trueTimestamp),
+    phoneTimestamp    : Value(phoneTimestamp),
+    clockDeltaMs      : Value(clockDeltaMs),
+    faceConfidence    : Value(faceConfidence),
+    embeddingHash     : Value(embeddingHash),
+    totpHash          : Value(totpHash),
+    hmacSignature     : Value(hmacSignature),
+    nonce             : Value(nonce),
+    syncStatus        : const Value('APPROVED'),
+  ));
+  
+  await SyncService.trySyncNow(eventId).catchError((_) {});
+}
+
