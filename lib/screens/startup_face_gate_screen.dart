@@ -58,11 +58,13 @@ class _StartupFaceGateScreenState extends State<StartupFaceGateScreen> {
     });
 
     try {
+      // Add a timeout to prevent indefinite loading
       final file = await _cam!.takePicture();
-      final result = await FaceService.analyse(file.path);
+      final result = await FaceService.analyse(file.path).timeout(const Duration(seconds: 10), onTimeout: () {
+        throw Exception('Face recognition timed out. Please try again.');
+      });
       if (!result.passed) {
         setState(() {
-          _busy = false;
           _msg = result.displayMessage;
         });
         return;
@@ -71,7 +73,6 @@ class _StartupFaceGateScreenState extends State<StartupFaceGateScreen> {
       final template = result.embeddingTemplate;
       if (template == null || template.isEmpty) {
         setState(() {
-          _busy = false;
           _msg = 'Could not read enough face landmarks. Try again.';
         });
         return;
@@ -99,7 +100,6 @@ class _StartupFaceGateScreenState extends State<StartupFaceGateScreen> {
 
       if (!matched) {
         setState(() {
-          _busy = false;
           _msg = 'Face did not match enrolled profile. Please align and retry.';
         });
         return;
@@ -109,9 +109,14 @@ class _StartupFaceGateScreenState extends State<StartupFaceGateScreen> {
       Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
       setState(() {
-        _busy = false;
         _msg = 'Face check failed: $e';
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+        });
+      }
     }
   }
 

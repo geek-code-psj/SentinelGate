@@ -234,15 +234,17 @@ class _CheckinScreenState extends State<CheckinScreen> {
     if (_capturing || !_camReady) return;
     setState(() { _capturing = true; _faceResult = null; });
     try {
+      // Add a timeout to prevent indefinite loading
       final xFile = await _cam!.takePicture();
-      final face  = await FaceService.analyse(xFile.path);
+      final face  = await FaceService.analyse(xFile.path).timeout(const Duration(seconds: 10), onTimeout: () {
+        throw Exception('Face recognition timed out. Please try again.');
+      });
       setState(() { _faceResult = face; _capturing = false; });
       if (!face.passed) return;
 
       setState(() => _processing = true);
       final studentId = await CryptoService.getStudentId();
       if (studentId == null || _qr == null) {
-        setState(() => _processing = false);
         return;
       }
 
@@ -252,13 +254,18 @@ class _CheckinScreenState extends State<CheckinScreen> {
           qr        : _qr!,
           imagePath : xFile.path);
 
-      setState(() { _result = result; _processing = false; _step = _sResult; });
+      setState(() { _result = result; _step = _sResult; });
     } catch (e) {
       setState(() {
         _faceResult = FaceResult.fail(FailReason.error, 'Error: $e');
         _capturing  = false;
-        _processing = false;
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _processing = false;
+        });
+      }
     }
   }
 
