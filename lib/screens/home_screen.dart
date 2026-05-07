@@ -27,6 +27,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
+
+    // Refresh geofence zones on screen load so they're available for GPS check
+    await SyncService.refreshZones();
+
     _studentId   = await CryptoService.getStudentId();
     if (_studentId != null) {
       _lastEvent = await _db.getLatestEvent(_studentId!);
@@ -111,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: Colors.blue.shade50,
                       textColor: Colors.blue.shade700,
                       message:
-                          'You must be within 50 m of the gate, '
+                          'You must be within 85 m of the gate (demo mode), '
                           'pass face liveness, and scan the rotating QR code to authenticate.',
                     ),
                   ],

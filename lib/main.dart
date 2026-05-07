@@ -11,7 +11,9 @@ import 'screens/checkin_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/startup_face_gate_screen.dart';
 import 'services/sync_service.dart';
+import 'services/sntp_service.dart';
 import 'utils/app_theme.dart';
+import 'utils/constants.dart';
 
 /// WorkManager background task dispatcher.
 /// This runs in a separate isolate — no Flutter UI access.
@@ -52,6 +54,10 @@ void main() async {
     backoffPolicy      : BackoffPolicy.exponential,
     backoffPolicyDelay : const Duration(seconds: 10),
   );
+
+  // Sync clock with server on cold start before any time-sensitive operations
+  debugPrint('[MAIN] Using Base URL: ${AppConstants.cloudBaseUrl}');
+  await SntpService.sync();
 
   runApp(const ProviderScope(child: SentinelGateApp()));
 }

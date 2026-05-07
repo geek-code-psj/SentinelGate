@@ -77,6 +77,12 @@ class SyncService {
 
   // ── Geofence zone refresh ─────────────────────────────────────────────────
 
+  /// Public method to refresh geofence zones on app load.
+  /// Makes zones available immediately instead of waiting for WorkManager.
+  static Future<void> refreshZones() async {
+    await _refreshZones();
+  }
+
   static Future<void> _refreshZones() async {
     final result = await ApiService.fetchZones();
     if (!result.ok || result.data == null) return;
@@ -84,7 +90,7 @@ class SyncService {
     final list = (result.data['geofences'] as List? ?? []);
     final companions = list.map((z) => GeofenceZonesCompanion(
       zoneId       : Value(z['id']  as String),
-      gateId       : Value(z['geofence_id'] ?? ''),
+      gateId       : Value(z['geofence_id'] ?? z['gate_id'] ?? ''),
       gateName     : Value(z['name'] as String),
       centerLat    : Value((z['center_lat'] as num).toDouble()),
       centerLng    : Value((z['center_lng'] as num).toDouble()),

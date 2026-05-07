@@ -63,25 +63,34 @@ class SntpService {
 
   static Future<SntpResult> _syncFrom(String baseUrl) async {
     try {
+      debugPrint('[SNTP] Syncing from: $baseUrl');
       final dio = Dio(BaseOptions(
         connectTimeout: const Duration(seconds: 5),
         receiveTimeout: const Duration(seconds: 5),
+        headers: {'Accept': 'application/json'},
       ));
-      final root = baseUrl.endsWith('/')
-          ? baseUrl.substring(0, baseUrl.length - 1)
-          : baseUrl;
-
+      
+      // Ensure baseUrl ends with /
+      final base = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
+      
       for (final path in _timePaths) {
+        // Strip leading slash from path to join correctly
+        final cleanPath = path.startsWith('/') ? path.substring(1) : path;
+        final fullUrl = '$base$cleanPath';
+        
+        debugPrint('[SNTP] Fetching $fullUrl');
         final t1 = DateTime.now().millisecondsSinceEpoch;
-        final res = await dio.get('$root$path');
+        final res = await dio.get(fullUrl);
         final t4 = DateTime.now().millisecondsSinceEpoch;
 
         if (res.statusCode != 200) {
+          debugPrint('[SNTP] Failed $fullUrl: ${res.statusCode}');
           continue;
         }
 
         final serverMs = _parseServerMs(res.data);
         if (serverMs == null) {
+          debugPrint('[SNTP] Could not parse time from: ${res.data}');
           continue;
         }
 

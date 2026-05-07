@@ -28,22 +28,30 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _enroll() async {
-    if (!_formKey.currentState!.validate()) return;
+    debugPrint('[LOGIN] Enroll button clicked');
+    if (!_formKey.currentState!.validate()) {
+      debugPrint('[LOGIN] Form validation failed');
+      return;
+    }
     setState(() { _loading = true; _error = null; });
 
     try {
-      // Get device fingerprint (use a unique ID)
+      debugPrint('[LOGIN] Getting device info...');
       final deviceInfo = await _getDeviceInfo();
+      debugPrint('[LOGIN] Device Info: $deviceInfo');
 
-      // Call backend to enroll device and get HMAC secret
+      debugPrint('[LOGIN] Calling ApiService.enrollDevice...');
       final enrollResult = await ApiService.enrollDevice(
         rollNumber: _rollCtrl.text.trim().toUpperCase(),
+        name: _nameCtrl.text.trim(),
+        department: _deptCtrl.text.trim(),
         deviceFingerprint: deviceInfo['fingerprint']!,
         platform: deviceInfo['platform']!,
         model: deviceInfo['model']!,
       );
 
       if (!enrollResult.ok) {
+        debugPrint('[LOGIN] Enrollment failed: ${enrollResult.error}');
         setState(() { _error = enrollResult.error ?? 'Enrollment failed'; _loading = false; });
         return;
       }
@@ -79,11 +87,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final platform = Theme.of(context).platform == TargetPlatform.android ? 'android' : 'ios';
 
     // Get model (fallback to generic)
-    String model = 'Unknown';
-    try {
-      // This would need device_info package for actual model
-      model = 'Android Device';
-    } catch (_) {}
+    // Note: device_info_plus package not installed - shows as generic
+    String model = 'Android Device';
 
     return {
       'fingerprint': deviceId,

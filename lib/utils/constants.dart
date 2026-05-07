@@ -10,25 +10,19 @@ class AppConstants {
   );
 
   /// Primary: Local campus intranet server (fast, used on campus WiFi)
-  static const String intranetBaseUrl = String.fromEnvironment(
-    'SG_INTRANET_BASE_URL',
-    defaultValue: 'https://sentinelgateweb-production.up.railway.app/api',
-  );
+  static const String intranetBaseUrl = 'https://sentinelgateweb-production.up.railway.app/api/';
 
   /// Fallback: Cloud server (used on 4G when intranet is unreachable)
-  static const String cloudBaseUrl = String.fromEnvironment(
-    'SG_CLOUD_BASE_URL',
-    defaultValue: 'https://sentinelgateweb-production.up.railway.app/api',
-  );
+  static const String cloudBaseUrl = 'https://sentinelgateweb-production.up.railway.app/api/';
 
   /// Public URLs for gate/admin web surfaces used in deployment docs.
   static const String gateQrWebUrl = String.fromEnvironment(
     'SG_GATE_QR_WEB_URL',
-    defaultValue: 'https://sentinel-gateweb-4sdy-5xlaqwa20.vercel.app/',
+    defaultValue: 'https://sentinel-gateweb-ejdf.vercel.app',
   );
   static const String adminWebUrl = String.fromEnvironment(
     'SG_ADMIN_WEB_URL',
-    defaultValue: 'https://sentinel-gateweb-ejdf-im2a9shr3.vercel.app/',
+    defaultValue: 'https://sentinel-gateweb-ejdf.vercel.app/admin',
   );
 
   // ── Geofence ──────────────────────────────────────────────────────────────

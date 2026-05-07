@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../models/database.dart';
 import '../utils/constants.dart';
 import 'crypto_service.dart';
@@ -19,24 +20,39 @@ class ApiService {
   static Dio get _intra => _intranet ??= _makeDio(AppConstants.intranetBaseUrl);
   static Dio get _cld   => _cloud    ??= _makeDio(AppConstants.cloudBaseUrl);
 
-  static Dio _makeDio(String base) => Dio(BaseOptions(
-    baseUrl        : base,
-    connectTimeout : const Duration(seconds: 8),
-    receiveTimeout : const Duration(seconds: 20),
-    headers        : {'Accept': 'application/json'},
-  ));
+  static Dio _makeDio(String base) {
+    final dio = Dio(BaseOptions(
+      baseUrl        : base,
+      connectTimeout : const Duration(seconds: 8),
+      receiveTimeout : const Duration(seconds: 20),
+      headers        : {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    ));
+    dio.interceptors.add(LogInterceptor(
+      requestBody: true,
+      responseBody: true,
+      logPrint: (obj) => debugPrint('[DIO] $obj'),
+    ));
+    return dio;
+  }
 
   // ── Device Enrollment ───────────────────────────────────────────────────────
 
   /// Call backend to enroll this device and get HMAC secret.
   static Future<ApiResult> enrollDevice({
     required String rollNumber,
+    required String name,
+    required String department,
     required String deviceFingerprint,
     required String platform,
     required String model,
   }) async {
     final body = {
       'roll_number': rollNumber,
+      'name': name,
+      'department': department,
       'device_fingerprint': deviceFingerprint,
       'platform': platform,
       'model': model,
@@ -44,12 +60,27 @@ class ApiService {
 
     // Enrollment does NOT require HMAC signature (no secret yet)
     try {
-      var res = await _intra.post('/auth/enroll', data: jsonEncode(body));
-      if (res.statusCode == 200 || res.statusCode == 201) return ApiResult.ok(res.data);
-      res = await _cld.post('/auth/enroll', data: jsonEncode(body));
-      if (res.statusCode == 200 || res.statusCode == 201) return ApiResult.ok(res.data);
-      return ApiResult.err('Enrollment failed: ${res.statusCode}');
+      debugPrint('[API] Enrolling student: $rollNumber');
+      
+      // Try intranet
+      final res1 = await _intra.post('auth/enroll', data: body);
+      if (res1.statusCode == 200 || res1.statusCode == 201) {
+        return ApiResult.ok(res1.data);
+      }
     } on DioException catch (e) {
+      debugPrint('[API] Intranet enrollment failed: ${e.message}');
+      // Fall through to cloud
+    }
+
+    try {
+      // Try cloud
+      final res2 = await _cld.post('auth/enroll', data: body);
+      if (res2.statusCode == 200 || res2.statusCode == 201) {
+        return ApiResult.ok(res2.data);
+      }
+      return ApiResult.err('Enrollment failed: ${res2.statusCode}');
+    } on DioException catch (e) {
+      debugPrint('[API] Cloud enrollment failed: ${e.message}');
       return ApiResult.err(_dioMsg(e));
     }
   }
@@ -150,12 +181,22 @@ class ApiService {
     Dio dio, String path, Map<String, dynamic> body, Map<String, String> headers,
   ) async {
     try {
-      final r = await dio.post(path,
-          data: jsonEncode(body),
-          options: Options(headers: headers));
+      // Dio is picky about leading slashes with baseUrl. 
+      // If baseUrl ends with /, path should NOT start with /.
+      final cleanPath = path.startsWith('/') ? path.substring(1) : path;
+      
+      final r = await dio.post(
+        cleanPath,
+        data: body, // Let Dio handle JSON encoding
+        options: Options(headers: headers),
+      );
       if (r.statusCode == 200 || r.statusCode == 201) return ApiResult.ok(r.data);
       return ApiResult.err('HTTP ${r.statusCode}');
     } on DioException catch (e) {
+      debugPrint('[API] POST $path failed: ${e.message}');
+      if (e.response != null) {
+        debugPrint('[API] Response data: ${e.response?.data}');
+      }
       return ApiResult.err(_dioMsg(e));
     }
   }
@@ -164,25 +205,36 @@ class ApiService {
     Dio dio, String path, Map<String, String> headers,
   ) async {
     try {
-      final r = await dio.get(path, options: Options(headers: headers));
+      final cleanPath = path.startsWith('/') ? path.substring(1) : path;
+      final r = await dio.get(cleanPath, options: Options(headers: headers));
       if (r.statusCode == 200) return ApiResult.ok(r.data);
       return ApiResult.err('HTTP ${r.statusCode}');
     } on DioException catch (e) {
+      debugPrint('[API] GET $path failed: ${e.message}');
       return ApiResult.err(_dioMsg(e));
     }
   }
 
   static String _dioMsg(DioException e) {
+    final method = e.requestOptions.method;
+    final path = e.requestOptions.path;
+    final baseUrl = e.requestOptions.baseUrl;
+    final fullUrl = '$baseUrl$path';
+
     switch (e.type) {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.receiveTimeout:
-        return 'Timeout';
+        return 'Timeout reaching $path';
       case DioExceptionType.connectionError:
-        return 'Unreachable';
+        return 'Unreachable: $fullUrl';
+      case DioExceptionType.badResponse:
+        final code = e.response?.statusCode;
+        if (code == 404) return '404 Not Found: $fullUrl';
+        if (code == 401) return 'HMAC rejected (401)';
+        if (code == 409) return 'Replay detected (409)';
+        return 'Server Error $code at $path';
       default:
-        if (e.response?.statusCode == 401) return 'HMAC rejected';
-        if (e.response?.statusCode == 409) return 'Replay detected';
-        return e.message ?? 'Unknown error';
+        return e.message ?? 'Unknown error at $path';
     }
   }
 
